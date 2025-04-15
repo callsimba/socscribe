@@ -2,20 +2,34 @@ import os
 import hashlib
 import json
 from utils.enrich import enrich_ip
+from triage.recommend import recommend_response
+
+
 try:
     from utils.enrich import enrich_virustotal
 except ImportError:
     enrich_virustotal = None
 
-def generate_html_report(alert, output_path):
-    rule = alert.get("rule", {})
-    src_ip = alert.get("srcip", "N/A")
-    timestamp = alert.get("timestamp", "N/A")
-    host = alert.get("agent", {}).get("name", "unknown")
-    full_log = alert.get("full_log", "")
-    rule_id = str(rule.get("id"))
 
-    # Load config
+def generate_html_report(alerts, output_path):
+    html = """
+    <html>
+    <head>
+        <title>SOCscribe Alert Report</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+            .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; }
+            h2 { color: #003366; }
+            h3 { color: #006699; }
+            code { background: #eee; padding: 2px 4px; border-radius: 4px; }
+            em { color: #666; font-size: 0.9em; }
+        </style>
+    </head>
+    <body>
+        <h1>SOCscribe Alerts Report</h1>
+    """
+
+    # Load config once
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
     try:
         with open(config_path, "r") as c:
@@ -26,98 +40,74 @@ def generate_html_report(alert, output_path):
         abuse_key = None
         vt_key = None
 
-    # Load playbooks
-    mitre = {}
-    playbook_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'playbooks.json')
-    try:
-        with open(playbook_path, "r") as f:
-            playbooks = json.load(f)
-            mitre = playbooks.get(rule_id, {})
-    except:
-        pass
+    for alert in alerts:
+        rule = alert.get("rule", {})
+        src_ip = alert.get("srcip", "N/A")
+        timestamp = alert.get("timestamp", "N/A")
+        host = alert.get("agent", {}).get("name", "unknown")
+        full_log = alert.get("full_log", "")
+        rule_id = str(rule.get("id"))
+        description = rule.get("description", "No description")
 
-    # Enrichments
-    ip_data = enrich_ip(src_ip, abuse_key)
-    vt_data = {}
-    if vt_key and full_log and enrich_virustotal:
-        hash_val = hashlib.sha256(full_log.encode()).hexdigest()
-        vt_data = enrich_virustotal(hash_val, vt_key)
+        # Enrichments
+        ip_data = enrich_ip(src_ip, abuse_key)
+        vt_data = {}
+        if vt_key and full_log and enrich_virustotal:
+            hash_val = hashlib.sha256(full_log.encode()).hexdigest()
+            vt_data = enrich_virustotal(hash_val, vt_key)
 
-    # HTML content
-    html = f"""
-    <html>
-    <head>
-        <title>SOCscribe Alert Report</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }}
-            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; }}
-            h2 {{ color: #003366; }}
-            h3 {{ color: #006699; }}
-            code {{ background: #eee; padding: 2px 4px; border-radius: 4px; }}
-            em {{ color: #666; font-size: 0.9em; }}
-        </style>
-    </head>
-    <body>
+        # Start panel for alert
+        html += f"""
         <div class="panel">
-            <h2>🔍 Alert Summary</h2>
-            <p><strong>Alert ID:</strong> {alert.get('id')}<br/>
-            <em>(This is the unique identifier of the alert event.)</em></p>
+            <h2>🚨 Alert ID: {alert.get('id')}</h2>
+            <p><strong>Timestamp:</strong> {timestamp}</p>
+            <p><strong>Host:</strong> {host}</p>
+            <p><strong>Source IP:</strong> {src_ip}</p>
+            <p><strong>Description:</strong> {description}</p>
+        """
 
-            <p><strong>Timestamp:</strong> {timestamp}<br/>
-            <em>(The exact time the alert was triggered.)</em></p>
+        mitre = rule.get("mitre", {})
+        if mitre:
+            html += f"""
+            <p><strong>MITRE Tactic:</strong> {mitre.get("tactic", "Unknown")}<br/>
+            <strong>Technique:</strong> {mitre.get("technique", "Unknown")} ({mitre.get("id", "-")})</p>
+            """
 
-            <p><strong>Host:</strong> {host}<br/>
-            <em>(The system or endpoint where the alert was detected.)</em></p>
+        if ip_data.get("geo"):
+            geo = ip_data["geo"]
+            html += f"<p><strong>Geo Info:</strong> {geo.get('city')}, {geo.get('region')}, {geo.get('country')} | ISP: {geo.get('isp')}<br/>"
+            html += "<em>(The suspected origin of the IP address involved.)</em></p>"
 
-            <p><strong>Source IP:</strong> {src_ip}<br/>
-            <em>(The IP address where the activity came from — could be an attacker.)</em></p>
+        if ip_data.get("abuse"):
+            abuse = ip_data["abuse"]
+            html += f"<p><strong>AbuseIPDB:</strong> {abuse.get('abuseConfidenceScore', 0)}/100 | Reports: {abuse.get('totalReports', 0)}<br/>"
+            html += "<em>(Community-submitted threat score of this IP.)</em></p>"
 
-            <p><strong>Description:</strong> {rule.get('description')}<br/>
-            <em>(A summary of what triggered this alert.)</em></p>
+        if vt_data and "positives" in vt_data:
+            html += f"<p><strong>VirusTotal:</strong> {vt_data['positives']} detections | <a href='{vt_data['link']}'>View Report</a><br/>"
+            html += "<em>(Number of AV engines that flagged this file.)</em></p>"
 
-            <p><strong>MITRE Tactic:</strong> {mitre.get('tactic', 'Unknown')}<br/>
-            <em>(The attacker’s goal — what they’re trying to achieve.)</em></p>
+        html += "<h3>🎯 Recommended Actions</h3><ul>"
+        actions = recommend_response(alert, return_text=True).splitlines()
+        for a in actions:
+            html += f"<li>{a}</li>"
+        html += "</ul>"
 
-            <p><strong>Technique:</strong> {mitre.get('technique', 'Unknown')} ({mitre.get('technique_id', '-')})<br/>
-            <em>(How the attacker attempted the tactic above.)</em></p>
-    """
+        # Role guidance
+        html += "<h3>🧑‍💼 Who Should Investigate This?</h3><p>"
+        if "brute force" in description.lower():
+            html += "This can be handled by a <strong>Tier 1 SOC Analyst</strong>.<br/><em>(Likely login abuse or scanning.)</em>"
+        elif mitre.get("tactic", "").lower() in ["persistence", "privilege escalation"]:
+            html += "Escalate to <strong>Threat Hunter</strong> or <strong>Incident Responder</strong>.<br/><em>(Possible lateral movement.)</em>"
+        elif mitre.get("technique", "").lower().startswith("malicious file"):
+            html += "A <strong>Malware Analyst</strong> should inspect this file.<br/><em>(Suspicious payload involved.)</em>"
+        elif "exfiltration" in mitre.get("tactic", "").lower():
+            html += "Escalate to <strong>SOC Lead</strong>.<br/><em>(Potential data breach.)</em>"
+        else:
+            html += "Start with a <strong>Tier 1 SOC Analyst</strong>.<br/><em>Escalate if needed.</em>"
+        html += "</p></div>"
 
-    if ip_data.get("geo"):
-        geo = ip_data["geo"]
-        html += f"<p><strong>Geo Info:</strong> {geo.get('city')}, {geo.get('region')}, {geo.get('country')} | ISP: {geo.get('isp')}<br/>"
-        html += "<em>(The suspected origin of the IP address involved.)</em></p>"
+    html += "</body></html>"
 
-    if ip_data.get("abuse"):
-        abuse = ip_data["abuse"]
-        html += f"<p><strong>AbuseIPDB:</strong> {abuse.get('abuseConfidenceScore', 0)}/100 | Reports: {abuse.get('totalReports', 0)}<br/>"
-        html += "<em>(Community-submitted threat score of this IP.)</em></p>"
-
-    if vt_data and "positives" in vt_data:
-        html += f"<p><strong>VirusTotal:</strong> {vt_data['positives']} detections | <a href='{vt_data['link']}'>View Report</a><br/>"
-        html += "<em>(Number of AV engines that flagged this file.)</em></p>"
-
-    # Recommendations
-    html += "<h3>🎯 Recommended Actions</h3><ul>"
-    actions = mitre.get("actions", [])
-    for a in actions:
-        html += f"<li>{a}</li>"
-    html += "</ul>"
-
-    # Role recommendation
-    html += "<h3>🧑‍💼 Who Should Investigate This?</h3><p>"
-    if "brute force" in rule.get("description", "").lower():
-        html += "This can be handled by a <strong>Tier 1 SOC Analyst</strong>.<br/><em>(It's likely part of scanning or login abuse.)</em>"
-    elif mitre.get("tactic", "").lower() in ["persistence", "privilege escalation"]:
-        html += "This should be escalated to a <strong>Threat Hunter</strong> or <strong>Incident Responder</strong>.<br/><em>(Possible lateral movement or deeper access attempts.)</em>"
-    elif mitre.get("technique", "").lower().startswith("malicious file"):
-        html += "A <strong>Malware Analyst</strong> should inspect the sample.<br/><em>(Suspicious payload or script involved.)</em>"
-    elif "exfiltration" in mitre.get("tactic", "").lower():
-        html += "Escalate to a <strong>SOC Lead</strong>.<br/><em>(This may indicate data theft or breach.)</em>"
-    else:
-        html += "Begin with a <strong>Tier 1 SOC Analyst</strong>. Escalate if needed."
-
-    html += "</p></div></body></html>"
-
-    # Save file
     with open(output_path, "w") as f:
         f.write(html)

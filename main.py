@@ -73,7 +73,7 @@ def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_path = os.path.join(export_dir, f"report_{timestamp}.html")
                 generate_html_report(accumulated_alerts, output_path)
-                console.print(f"📄 Report saved to: [bold green]{output_path}[/bold green]")
+                console.print(f"✅ Exported: [green]{output_path}[/green]")
                 if Confirm.ask("Open report in browser?"):
                     webbrowser.open(f"file://{output_path}")
     except FileNotFoundError:
