@@ -63,13 +63,13 @@ def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
 def main():
     parser = argparse.ArgumentParser(description="SOCscribe - SOC Alert Triage Assistant")
     parser.add_argument("parse", nargs="?", help="Path to a single alert JSON file")
-    parser.add_argument("--watch", action="store_true", help="Live mode - watch Wazuh alert file")
+    parser.add_argument("--watch", nargs="?", const="/var/ossec/logs/alerts/alerts.json", help="Live mode — optional path to alert file")
     parser.add_argument("--export", help="Directory to save HTML report (optional)")
     parser.add_argument("--open", action="store_true", help="Open report in browser after export")
     args = parser.parse_args()
 
     if args.watch:
-        watch_alerts_file()
+        watch_alerts_file(filepath=args.watch)
         return
 
     if args.parse:
