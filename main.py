@@ -1,5 +1,7 @@
 import json
 import argparse
+import os
+from datetime import datetime
 from triage.explain import explain_alert
 from triage.recommend import recommend_response
 from utils.export import generate_html_report
@@ -7,7 +9,8 @@ from utils.export import generate_html_report
 def main():
     parser = argparse.ArgumentParser(description="SOCscribe - SOC Alert Triage Assistant")
     parser.add_argument("parse", help="Path to the Wazuh alert JSON file")
-    parser.add_argument("--export", help="Path to save the HTML report (optional)", default=None)
+    parser.add_argument("--export", help="Directory to save report (optional)", default=None)
+    parser.add_argument("--export-format", help="html or pdf (default: html)", choices=["html", "pdf"], default="html")
     args = parser.parse_args()
 
     try:
@@ -23,8 +26,11 @@ def main():
         recommend_response(alert)
 
         if args.export:
-            generate_html_report(alert, args.export)
-            print(f"\n📄 Report saved to: {args.export}")
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"report_{timestamp}.{args.export_format}"
+            output_path = os.path.join(args.export, filename)
+            generate_html_report(alert, output_path, output_format=args.export_format)
+            print(f"\n📄 Report saved to: {output_path}")
 
     except Exception as e:
         print(f"❌ Failed to parse alert: {e}")
