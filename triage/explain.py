@@ -62,13 +62,22 @@ def explain_alert(alert, return_text=False):
     flat_alert = flatten_dict(alert)
     text = Text()
 
-    for key, value in flat_alert.items():
-        text.append(f"\n🔹 {key}: {value}\n")
-        explanation = get_field_explanation(key, value)
-        text.append(f"    ➤ What does this mean? {explanation}\n")
-
-    console.print(text)
-
+    def explain_alert(alert, return_text=False):
+        flat_alert = flatten_dict(alert)
+    
     if return_text:
-        return text.plain
+        # For HTML export with descriptions
+        text = ""
+        for key, value in flat_alert.items():
+            explanation = get_field_explanation(key, value)
+            text += f"\n🔹 {key}: {value}\n    ➤ What does this mean? {explanation}\n"
+        return text.strip()
+
+    else:
+        # For CLI, basic alert display only (no explanation)
+        text = Text()
+        for key, value in flat_alert.items():
+            text.append(f"\n🔹 {key}: {value}")
+        console.print(text)
+
 
