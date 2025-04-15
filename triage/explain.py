@@ -1,7 +1,7 @@
 from rich.console import Console
 from rich.text import Text
 from utils.eventid_map import get_event_description
-from ai_describer import get_dynamic_description
+from .ai_describer import get_dynamic_description
 
 console = Console()
 
