@@ -1,8 +1,9 @@
 from rich.console import Console
 from rich.panel import Panel
-from utils.enrich import enrich_ip
+from utils.enrich import enrich_ip, enrich_virustotal
 import json
 import os
+import hashlib
 
 console = Console()
 
@@ -12,6 +13,18 @@ def explain_alert(alert):
     timestamp = alert.get("timestamp", "N/A")
     host = alert.get("agent", {}).get("name", "unknown")
     rule_id = str(rule.get("id"))
+    full_log = alert.get("full_log", "")
+    
+    # Load config
+    config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
+    try:
+        with open(config_path, "r") as c:
+            config = json.load(c)
+            abuse_key = config.get("abuseipdb_key")
+            vt_key = config.get("virustotal_key")
+    except:
+        abuse_key = None
+        vt_key = None
 
     # Load playbook (MITRE mapping)
     data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'playbooks.json')
@@ -29,7 +42,7 @@ def explain_alert(alert):
         mitre_output = f"[red]❌ Error loading MITRE mapping: {e}"
 
     # Enrich the IP
-    ip_data = enrich_ip(src_ip)
+    ip_data = enrich_ip(src_ip, abuseipdb_key=abuse_key)
 
     geo_output = ""
     if "geo" in ip_data:
@@ -48,6 +61,16 @@ def explain_alert(alert):
         elif "error" in abuse:
             abuse_output = f"[yellow]⚠️ {abuse['error']}[/]"
 
+    # (Optional) Generate SHA256 of full_log for VT
+    vt_output = ""
+    if vt_key and full_log:
+        file_hash = hashlib.sha256(full_log.encode()).hexdigest()
+        vt_data = enrich_virustotal(file_hash, vt_key)
+        if "positives" in vt_data:
+            vt_output = f"[bold magenta]🧪 VirusTotal:[/] {vt_data['positives']} detections | [link={vt_data['link']}]View Report[/link]"
+        elif "error" in vt_data:
+            vt_output = f"[yellow]⚠️ VT Error: {vt_data['error']}[/]"
+
     # Render panel
     panel_text = f"""
 [bold red]🚨 Alert ID:[/] {alert.get('id')}
@@ -59,6 +82,7 @@ def explain_alert(alert):
 {mitre_output}
 {geo_output}
 {abuse_output}
+{vt_output}
     """
 
     console.print(Panel(panel_text.strip(), title="[bold blue]🔍 Alert Summary", expand=False))
