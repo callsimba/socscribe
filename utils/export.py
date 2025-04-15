@@ -22,13 +22,14 @@ def generate_html_report(alerts, output_path):
             h3 { color: #006699; }
             code { background: #eee; padding: 2px 4px; border-radius: 4px; }
             em { color: #666; font-size: 0.9em; }
+            details { margin-top: 5px; font-size: 0.9em; }
+            summary { cursor: pointer; color: #444; }
         </style>
     </head>
     <body>
         <h1>SOCscribe Alerts Report</h1>
     """
 
-    # Load config once
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
     try:
         with open(config_path, "r") as c:
@@ -58,31 +59,63 @@ def generate_html_report(alerts, output_path):
         html += f"""
         <div class="panel">
             <h2>🚨 Alert ID: {alert.get('id')}</h2>
-            <p><strong>Timestamp:</strong> {timestamp}</p>
-            <p><strong>Host:</strong> {host}</p>
-            <p><strong>Source IP:</strong> {src_ip}</p>
-            <p><strong>Description:</strong> {description}</p>
+
+            <p><strong>Timestamp:</strong> {timestamp}
+            <details><summary>What does this mean?</summary>
+            <em>The exact time the alert was triggered. Useful for understanding when suspicious activity occurred.</em>
+            </details></p>
+
+            <p><strong>Host:</strong> {host}
+            <details><summary>What does this mean?</summary>
+            <em>This is the endpoint (e.g., computer or server) where the suspicious behavior was detected.</em>
+            </details></p>
+
+            <p><strong>Source IP:</strong> {src_ip}
+            <details><summary>What does this mean?</summary>
+            <em>This is the IP address from which the activity originated — could be an attacker or another host on the network.</em>
+            </details></p>
+
+            <p><strong>Description:</strong> {description}
+            <details><summary>What does this mean?</summary>
+            <em>This explains what triggered the alert. Read closely — it may indicate command execution, access attempts, or malware behavior.</em>
+            </details></p>
         """
 
         mitre = rule.get("mitre", {})
+        tactic_raw = mitre.get("tactic", "Unknown")
+        tactic_display = tactic_raw if isinstance(tactic_raw, str) else ", ".join(tactic_raw)
+        technique = mitre.get("technique", "")
+        technique_id = mitre.get("id", "-")
+
+        if isinstance(technique, list):
+            technique = ", ".join(technique)
+        technique = technique.strip()
+
         html += f"""
-        <p><strong>MITRE Tactic:</strong> {mitre.get("tactic", "Unknown")}<br/>
-        <strong>Technique:</strong> {mitre.get("technique", "Unknown")} ({mitre.get("id", "-")})</p>
+        <p><strong>MITRE Tactic:</strong> {tactic_display}
+        <details><summary>What does this mean?</summary>
+        <em>This is the attacker’s goal — for example, execution, privilege escalation, or lateral movement.</em>
+        </details></p>
+
+        <p><strong>Technique:</strong> {technique} ({technique_id})
+        <details><summary>What does this mean?</summary>
+        <em>This describes how the tactic was carried out — such as using PowerShell, command shell, or scheduled tasks.</em>
+        </details></p>
         """
 
         if ip_data.get("geo"):
             geo = ip_data["geo"]
             html += f"<p><strong>Geo Info:</strong> {geo.get('city')}, {geo.get('region')}, {geo.get('country')} | ISP: {geo.get('isp')}<br/>"
-            html += "<em>(The suspected origin of the IP address involved.)</em></p>"
+            html += "<details><summary>What does this mean?</summary><em>This shows the suspected physical location and internet provider of the IP address involved.</em></details></p>"
 
         if ip_data.get("abuse"):
             abuse = ip_data["abuse"]
             html += f"<p><strong>AbuseIPDB:</strong> {abuse.get('abuseConfidenceScore', 0)}/100 | Reports: {abuse.get('totalReports', 0)}<br/>"
-            html += "<em>(Community-submitted threat score of this IP.)</em></p>"
+            html += "<details><summary>What does this mean?</summary><em>This score reflects how often this IP has been reported as malicious by the community.</em></details></p>"
 
         if vt_data and "positives" in vt_data:
             html += f"<p><strong>VirusTotal:</strong> {vt_data['positives']} detections | <a href='{vt_data['link']}'>View Report</a><br/>"
-            html += "<em>(Number of AV engines that flagged this file.)</em></p>"
+            html += "<details><summary>What does this mean?</summary><em>This shows how many antivirus engines flagged the file involved in the alert.</em></details></p>"
 
         html += "<h3>🎯 Recommended Actions</h3><ul>"
         actions = recommend_response(alert, return_text=True).splitlines()
@@ -93,22 +126,16 @@ def generate_html_report(alerts, output_path):
         # Role recommendation
         html += "<h3>🧑‍💼 Who Should Investigate This?</h3><p>"
 
-        tactic_raw = mitre.get("tactic", "")
         if isinstance(tactic_raw, list):
             tactic = [t.lower() for t in tactic_raw]
         else:
             tactic = [tactic_raw.lower()]
 
-        technique = mitre.get("technique", "")
-        if isinstance(technique, list):
-            technique = ", ".join(technique)
-        technique = technique.lower()
-
         if "brute force" in description.lower():
             html += "This can be handled by a <strong>Tier 1 SOC Analyst</strong>.<br/><em>(Likely login abuse or scanning.)</em>"
         elif "persistence" in tactic or "privilege escalation" in tactic:
             html += "This should be escalated to a <strong>Threat Hunter</strong> or <strong>Incident Responder</strong>.<br/><em>(Possible lateral movement or deeper access attempts.)</em>"
-        elif technique.startswith("malicious file"):
+        elif technique.lower().startswith("malicious file"):
             html += "A <strong>Malware Analyst</strong> should inspect this file.<br/><em>(Suspicious payload involved.)</em>"
         elif "exfiltration" in tactic:
             html += "Escalate to a <strong>SOC Lead</strong>.<br/><em>(Potential data breach.)</em>"
