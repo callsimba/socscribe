@@ -1,9 +1,15 @@
 from rich.console import Console
 from rich.panel import Panel
-from utils.enrich import enrich_ip, enrich_virustotal
+from utils.enrich import enrich_ip
 import json
 import os
 import hashlib
+
+# Optional VT import
+try:
+    from utils.enrich import enrich_virustotal
+except ImportError:
+    enrich_virustotal = None
 
 console = Console()
 
@@ -14,7 +20,7 @@ def explain_alert(alert):
     host = alert.get("agent", {}).get("name", "unknown")
     rule_id = str(rule.get("id"))
     full_log = alert.get("full_log", "")
-    
+
     # Load config
     config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
     try:
@@ -41,7 +47,7 @@ def explain_alert(alert):
     except Exception as e:
         mitre_output = f"[red]❌ Error loading MITRE mapping: {e}"
 
-    # Enrich the IP
+    # Enrich IP
     ip_data = enrich_ip(src_ip, abuseipdb_key=abuse_key)
 
     geo_output = ""
@@ -61,9 +67,9 @@ def explain_alert(alert):
         elif "error" in abuse:
             abuse_output = f"[yellow]⚠️ {abuse['error']}[/]"
 
-    # (Optional) Generate SHA256 of full_log for VT
+    # Optional VirusTotal Lookup
     vt_output = ""
-    if vt_key and full_log:
+    if vt_key and full_log and enrich_virustotal:
         file_hash = hashlib.sha256(full_log.encode()).hexdigest()
         vt_data = enrich_virustotal(file_hash, vt_key)
         if "positives" in vt_data:
@@ -71,7 +77,7 @@ def explain_alert(alert):
         elif "error" in vt_data:
             vt_output = f"[yellow]⚠️ VT Error: {vt_data['error']}[/]"
 
-    # Render panel
+    # Render Output
     panel_text = f"""
 [bold red]🚨 Alert ID:[/] {alert.get('id')}
 [bold yellow]🕒 Timestamp:[/] {timestamp}
