@@ -10,7 +10,7 @@ except ImportError:
     enrich_virustotal = None
 
 
-def generate_html_report(alerts, output_path):
+def export_alerts(alerts, output_path):
     html = """
     <html>
     <head>
