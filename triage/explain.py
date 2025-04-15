@@ -1,48 +1,71 @@
 from rich.console import Console
 from rich.text import Text
 from utils.eventid_map import get_event_description
-from utils.sysmon_eventid_map import explain_sysmon_event
+from ai_describer import get_dynamic_description
 
 console = Console()
 
-def explain_alert(alert, return_text=False):
-    rule = alert.get("rule", {})
-    agent = alert.get("agent", {})
-    data = alert.get("data", {})
+# Utility: Flatten nested dict with dot notation
+def flatten_dict(d, parent_key='', sep='.'):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
 
-    mitre = {
-        "tactic": rule.get("mitre", {}).get("tactic", "Unknown"),
-        "technique": rule.get("mitre", {}).get("technique", "Unknown"),
-        "id": rule.get("mitre", {}).get("id", "-")
-    }
+# Explanation logic for keys and values
+def get_field_explanation(key, value):
+    key = key.lower()
+    value = str(value).lower()
+
+    # Key-specific explanations
+    if "agent.name" in key:
+        return "This is the hostname of the endpoint that generated the alert."
+    elif "rule.description" in key:
+        if "powershell" in value:
+            return "PowerShell was used — a common technique for running scripts or payloads."
+        elif "cmd" in value:
+            return "Command Prompt activity — may indicate manual execution or script usage."
+        return "Describes what triggered the alert. Look closely — this can reveal suspicious behavior."
+    elif "data.win.system.eventid" in key:
+        return get_event_description(value)
+    elif "mitre.tactic" in key:
+        return "This is the high-level objective of the attacker, like Execution or Persistence."
+    elif "mitre.technique" in key:
+        return "The specific method used to carry out the tactic, such as PowerShell or Registry Run Keys."
+    elif "srcip" in key:
+        return "The source IP address where the traffic or event originated."
+    elif "geoip" in key:
+        return "Geolocation info derived from IP address — shows country, city, ISP, etc."
+    elif "user.name" in key:
+        return "This is the username associated with the event. May help trace attacker identity."
+    elif "process.name" in key:
+        return "The name of the process that triggered this alert. Useful in identifying suspicious binaries."
+    elif "win.system.providerName" in key:
+        return "The name of the Windows event provider that logged this event."
+    elif "win.system.task" in key:
+        return "Windows Event Log task — shows what kind of activity was performed."
+    elif "win.system.level" in key:
+        return "Indicates severity — higher means more critical."
+    elif "rule.groups" in key:
+        return "Indicates the rule category — such as malware, system, audit, etc."
+
+    # Fallback to ChatGPT if no match found above
+    return get_dynamic_description(key, value)
+
+# Main alert explanation
+
+def explain_alert(alert):
+    flat_alert = flatten_dict(alert)
 
     text = Text()
-    text.append(f"🚨 Alert ID: {alert.get('id')}\n")
-    text.append(f"🕒 Timestamp: {alert.get('timestamp')}\n")
-    text.append(f"💻 Host: {agent.get('name', 'unknown')}\n")
-    text.append(f"🌐 Source IP: {alert.get('srcip', 'N/A')}\n")
-    text.append(f"📜 Description: {rule.get('description', 'No description')}\n\n")
-    text.append(f"🧠 MITRE Tactic: {mitre['tactic']}\n")
-    text.append(f"📌 Technique: {mitre['technique']} ({mitre['id']})\n")
+    for key, value in flat_alert.items():
+        text.append(f"\n🔹 {key}: {value}\n")
+        explanation = get_field_explanation(key, value)
+        text.append(f"    ➤ What does this mean? {explanation}\n")
 
-    if "command" in data:
-        text.append(f"\n🧾 Command Executed: {data['command']}\n")
-    if "commandLine" in data:
-        text.append(f"🧾 Command Line: {data['commandLine']}\n")
-    if "image" in data:
-        text.append(f"🗂️ Image Path: {data['image']}\n")
-    if "targetFilename" in data:
-        text.append(f"📄 Target File: {data['targetFilename']}\n")
-    if "eventID" in data:
-        event_id_str = str(data['eventID'])
-        sysmon_explanation = explain_sysmon_event(event_id_str)
-        if sysmon_explanation:
-            text.append(f"\n🔎 Sysmon Event ID {event_id_str}:\n")
-            text.append(f"{sysmon_explanation['description']}\n")
-            text.append(f"💡 Detection Tip: {sysmon_explanation['detection_tip']}\n")
-            text.append(f"🎯 MITRE ID: {sysmon_explanation['mitre_id']} ({sysmon_explanation['mitre_technique']})\n")
-
-    if return_text:
-        return text
-    else:
-        console.print(text)
+    console.print(text)
+    return text
