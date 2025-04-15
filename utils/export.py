@@ -43,7 +43,7 @@ def generate_html_report(alert, output_path, output_format="html"):
         hash_val = hashlib.sha256(full_log.encode()).hexdigest()
         vt_data = enrich_virustotal(hash_val, vt_key)
 
-    # HTML Template
+    # HTML content
     html = f"""
     <html>
     <head>
@@ -85,10 +85,17 @@ def generate_html_report(alert, output_path, output_format="html"):
         html += f"<li>{a}</li>"
     html += "</ul></div></body></html>"
 
-    # Export
+    # Export logic
     if output_format == "pdf":
         import pdfkit
-        pdfkit.from_string(html, output_path)
+        options = {
+            'quiet': '',
+            'no-outline': None,
+            'disable-smart-shrinking': None,
+            'enable-local-file-access': None,
+            'page-size': 'A4',
+        }
+        pdfkit.from_string(html, output_path, options=options)
     else:
         with open(output_path, "w") as f:
             f.write(html)
