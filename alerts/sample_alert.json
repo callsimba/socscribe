@@ -1,0 +1,25 @@
+{
+    "rule": {
+      "id": "5712",
+      "level": 10,
+      "description": "Multiple failed SSH login attempts",
+      "mitre": {
+        "id": ["T1110"],
+        "tactic": ["Credential Access"],
+        "technique": ["Brute Force"]
+      }
+    },
+    "agent": {
+      "id": "001",
+      "name": "kali-host"
+    },
+    "manager": {
+      "name": "wazuh-manager"
+    },
+    "id": "1679404023.589421",
+    "full_log": "sshd[2345]: Failed password for invalid user admin from 185.99.34.17 port 22 ssh2",
+    "srcip": "185.99.34.17",
+    "location": "/var/log/auth.log",
+    "timestamp": "2025-04-15T11:07:03Z"
+  }
+  
