@@ -13,9 +13,13 @@ from rich.prompt import Prompt, Confirm
 
 console = Console()
 
-collected_alerts = []
+DEFAULT_ALERT_PATH = "/var/ossec/logs/alerts/alerts.json"
+
+all_alerts = []
+
 
 def process_alert(alert):
+    all_alerts.append(alert)
     rule = alert.get("rule", {})
     agent = alert.get("agent", {})
     mitre = {
@@ -23,7 +27,6 @@ def process_alert(alert):
         "technique": rule.get("mitre", {}).get("technique", "Unknown"),
         "id": rule.get("mitre", {}).get("id", "-")
     }
-
     geo = alert.get("geo_info", {})
 
     text = Text()
@@ -45,8 +48,9 @@ def process_alert(alert):
     explain_alert(alert)
     recommend_response(alert)
 
-def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
-    console.print(f"\n📡 Listening for new alerts in: {filepath}")
+
+def watch_alerts_file(filepath=DEFAULT_ALERT_PATH):
+    console.print(f"📡 Listening for new alerts in: [bold]{filepath}[/bold]")
     try:
         with open(filepath, "r") as f:
             f.seek(0, os.SEEK_END)
@@ -57,72 +61,63 @@ def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
                     continue
                 try:
                     alert = json.loads(line)
-                    collected_alerts.append(alert)
                     process_alert(alert)
                 except Exception as e:
-                    console.print(f"⚠️ Skipped malformed alert: {e}", style="yellow")
-    except FileNotFoundError:
-        console.print(f"❌ File not found: {filepath}", style="bold red")
-
-def export_prompt(alerts):
-    if not alerts:
+                    console.print(f"⚠️ Skipped malformed alert: {e}")
+    except KeyboardInterrupt:
+        console.print("\n🛑 Watch mode interrupted.")
+        if Confirm.ask("Do you want to export the collected alerts to HTML?"):
+            export_all_alerts()
         return
-    if Confirm.ask("Do you want to export the alert(s) to HTML?"):
-        output_dir = Prompt.ask("Directory to save HTML report", default="exports")
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"report_{timestamp}.html"
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, filename)
-        generate_html_report(alerts, output_path)
-        console.print(f"\n📄 Report saved to: {output_path}")
-        if Confirm.ask("Open in browser?"):
-            webbrowser.open(f"file://{os.path.abspath(output_path)}")
-            console.print("🌐 Report opened in browser.")
+    except FileNotFoundError:
+        console.print(f"❌ File not found: {filepath}")
+
+
+def export_all_alerts():
+    if not all_alerts:
+        console.print("⚠️ No alerts to export.")
+        return
+    output_dir = "exports"
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output_path = os.path.join(output_dir, f"watch_report_{timestamp}.html")
+    generate_html_report(all_alerts, output_path)
+    console.print(f"📄 Watch session exported to: {output_path}")
+
 
 def interactive_prompt():
     while True:
-        console.print("\n[bold cyan]SOCscribe Setup Wizard")
-        mode = Prompt.ask("Choose mode", choices=["1", "2"], default="2", show_choices=False)
+        console.print("\n[bold blue]SOCscribe Setup Wizard")
+        mode = Prompt.ask("Choose mode", choices=["1", "2"], default="2")
 
-        if mode == "1":  # Watch
-            default_path = "/var/ossec/logs/alerts/alerts.json"
-            try:
-                watch_alerts_file(filepath=default_path)
-            except KeyboardInterrupt:
-                console.print("\n👋 Stopped live watch mode.", style="yellow")
-                export_prompt(collected_alerts)
-            continue
+        if mode == "1":
+            watch_alerts_file(DEFAULT_ALERT_PATH)
 
-        elif mode == "2":  # File
-            override = Confirm.ask("Do you want to provide a custom file path?", default=False)
-            if override:
+        elif mode == "2":
+            use_custom = Prompt.ask("Do you want to provide a custom file path? [y/n]", choices=["y", "n"], default="n")
+            if use_custom == "y":
                 filepath = Prompt.ask("Path to alert JSON file")
-                try:
-                    with open(filepath, "r") as f:
-                        alert = json.load(f)
-                except Exception as e:
-                    console.print(f"[red]❌ Failed to load file: {e}")
-                    continue
             else:
-                filepath = "/var/ossec/logs/alerts/alerts.json"
-                console.print(f"\n📄 Loading last alert from Wazuh: {filepath}")
-                try:
-                    with open(filepath, "r") as f:
-                        lines = f.readlines()
-                        last_line = lines[-1]
-                        alert = json.loads(last_line)
-                except Exception as e:
-                    console.print(f"[red]❌ Failed to load alert from Wazuh log: {e}")
-                    continue
+                filepath = DEFAULT_ALERT_PATH
+            console.print(f"\n📄 Loading last alert from Wazuh: {filepath}")
+            try:
+                with open(filepath, "r") as f:
+                    lines = f.readlines()
+                    if not lines:
+                        console.print("⚠️ No alerts found in the file.")
+                        continue
+                    alert = json.loads(lines[-1])
+                    process_alert(alert)
+            except Exception as e:
+                console.print(f"❌ Failed to load alert from Wazuh log: {e}")
 
-            process_alert(alert)
-            export_prompt([alert])
 
 def main():
     try:
         interactive_prompt()
     except KeyboardInterrupt:
-        console.print("\n👋 Exiting SOCscribe. Goodbye!", style="bold red")
+        console.print("\n👋 Exiting SOCscribe. Goodbye!")
+
 
 if __name__ == "__main__":
     main()
