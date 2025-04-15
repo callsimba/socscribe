@@ -5,7 +5,7 @@ from utils.sysmon_eventid_map import explain_sysmon_event
 
 console = Console()
 
-def explain_alert(alert):
+def explain_alert(alert, return_text=False):
     rule = alert.get("rule", {})
     agent = alert.get("agent", {})
     data = alert.get("data", {})
@@ -16,7 +16,6 @@ def explain_alert(alert):
         "id": rule.get("mitre", {}).get("id", "-")
     }
 
-    # Print summary box
     text = Text()
     text.append(f"🚨 Alert ID: {alert.get('id')}\n")
     text.append(f"🕒 Timestamp: {alert.get('timestamp')}\n")
@@ -26,7 +25,6 @@ def explain_alert(alert):
     text.append(f"🧠 MITRE Tactic: {mitre['tactic']}\n")
     text.append(f"📌 Technique: {mitre['technique']} ({mitre['id']})\n")
 
-    # Explain common deep fields if available
     if "command" in data:
         text.append(f"\n🧾 Command Executed: {data['command']}\n")
     if "commandLine" in data:
@@ -44,4 +42,7 @@ def explain_alert(alert):
             text.append(f"💡 Detection Tip: {sysmon_explanation['detection_tip']}\n")
             text.append(f"🎯 MITRE ID: {sysmon_explanation['mitre_id']} ({sysmon_explanation['mitre_technique']})\n")
 
-    console.print(text)
+    if return_text:
+        return text
+    else:
+        console.print(text)
