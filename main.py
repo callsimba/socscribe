@@ -16,8 +16,12 @@ console = Console()
 
 all_alerts = []
 
-def process_alert(alert):
+def process_alert(alert, min_level=0):
     rule = alert.get("rule", {})
+    level = rule.get("level", 0)
+    if level < min_level:
+        return
+
     agent = alert.get("agent", {})
     mitre = {
         "tactic": rule.get("mitre", {}).get("tactic", "Unknown"),
@@ -47,7 +51,7 @@ def process_alert(alert):
     recommend_response(alert)
 
 
-def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
+def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json", min_level=0):
     console.print(f"\n📡 Listening for new alerts in: [bold green]{filepath}[/bold green]\n")
     try:
         with open(filepath, "r") as f:
@@ -59,8 +63,10 @@ def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json"):
                     continue
                 try:
                     alert = json.loads(line)
-                    all_alerts.append(alert)
-                    process_alert(alert)
+                    rule_level = alert.get("rule", {}).get("level", 0)
+                    if rule_level >= min_level:
+                        all_alerts.append(alert)
+                        process_alert(alert, min_level)
                 except Exception as e:
                     console.print(f"[red]⚠️ Skipped malformed alert:[/red] {e}")
     except KeyboardInterrupt:
@@ -81,6 +87,7 @@ def main():
     parser.add_argument("--watch", nargs="?", const="/var/ossec/logs/alerts/alerts.json", help="Live mode — optional path to alert file")
     parser.add_argument("--export", help="Directory to save HTML report (optional)")
     parser.add_argument("--open", action="store_true", help="Open report in browser after export")
+    parser.add_argument("--filter-level", type=int, default=0, help="Minimum alert level to process")
     args = parser.parse_args()
 
     if not args.watch and not args.parse:
@@ -91,7 +98,7 @@ def main():
 
         if choice == "1":
             # Open watch mode in new terminal
-            watch_command = f"python3 {__file__} --watch"
+            watch_command = f"python3 {__file__} --watch --filter-level {args.filter_level}"
             subprocess.Popen(["gnome-terminal", "--", "bash", "-c", watch_command])
             console.print("\n📡 [bold green]Live watch started in new terminal[/bold green]")
             return
@@ -103,7 +110,7 @@ def main():
             return
 
     if args.watch:
-        watch_alerts_file(filepath=args.watch)
+        watch_alerts_file(filepath=args.watch, min_level=args.filter_level)
         return
 
     if args.parse:
@@ -111,7 +118,7 @@ def main():
             with open(args.parse, "r") as f:
                 alert = json.load(f)
 
-            process_alert(alert)
+            process_alert(alert, min_level=args.filter_level)
 
             if args.export:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
