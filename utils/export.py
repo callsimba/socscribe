@@ -7,7 +7,7 @@ try:
 except ImportError:
     enrich_virustotal = None
 
-def generate_html_report(alert, output_path):
+def generate_html_report(alert, output_path, output_format="html"):
     rule = alert.get("rule", {})
     src_ip = alert.get("srcip", "N/A")
     timestamp = alert.get("timestamp", "N/A")
@@ -68,27 +68,27 @@ def generate_html_report(alert, output_path):
             <p><strong>Technique:</strong> {mitre.get('technique', 'Unknown')} ({mitre.get('technique_id', '-')})</p>
     """
 
-    # Geo info
     if ip_data.get("geo"):
         geo = ip_data["geo"]
         html += f"<p><strong>Geo Info:</strong> {geo.get('city')}, {geo.get('region')}, {geo.get('country')} | ISP: {geo.get('isp')}</p>"
 
-    # Abuse info
     if ip_data.get("abuse"):
         abuse = ip_data["abuse"]
         html += f"<p><strong>AbuseIPDB:</strong> {abuse.get('abuseConfidenceScore', 0)}/100 | Reports: {abuse.get('totalReports', 0)}</p>"
 
-    # VT info
     if vt_data and "positives" in vt_data:
         html += f"<p><strong>VirusTotal:</strong> {vt_data['positives']} detections | <a href='{vt_data['link']}'>View Report</a></p>"
 
-    # Actions
     html += "<h3>🎯 Recommended Actions</h3><ul>"
     actions = mitre.get("actions", [])
     for a in actions:
         html += f"<li>{a}</li>"
     html += "</ul></div></body></html>"
 
-    # Save to file
-    with open(output_path, "w") as f:
-        f.write(html)
+    # Export
+    if output_format == "pdf":
+        import pdfkit
+        pdfkit.from_string(html, output_path)
+    else:
+        with open(output_path, "w") as f:
+            f.write(html)
