@@ -2,26 +2,22 @@ import json
 import argparse
 import os
 import time
-import subprocess
 from datetime import datetime
 from triage.explain import explain_alert
 from triage.recommend import recommend_response
 from utils.export import generate_html_report
-import webbrowser
 from rich.console import Console
 from rich.text import Text
-from rich.panel import Panel
+from rich.prompt import Prompt, IntPrompt, Confirm
+import webbrowser
 
 console = Console()
 
-all_alerts = []
+def process_alert(alert, seen_ids=None):
+    if seen_ids is not None and alert.get("id") in seen_ids:
+        return  # Skip duplicates
 
-def process_alert(alert, min_level=0):
     rule = alert.get("rule", {})
-    level = rule.get("level", 0)
-    if level < min_level:
-        return
-
     agent = alert.get("agent", {})
     mitre = {
         "tactic": rule.get("mitre", {}).get("tactic", "Unknown"),
@@ -32,7 +28,7 @@ def process_alert(alert, min_level=0):
     geo = alert.get("geo_info", {})
 
     text = Text()
-    text.append(f"🚨 Alert ID: {alert.get('id')}\n")
+    text.append(f"\n🚨 Alert ID: {alert.get('id')}\n")
     text.append(f"🕒 Timestamp: {alert.get('timestamp')}\n")
     text.append(f"💻 Host: {agent.get('name', 'unknown')}\n")
     text.append(f"🌐 Source IP: {alert.get('srcip', 'N/A')}\n")
@@ -43,96 +39,79 @@ def process_alert(alert, min_level=0):
     if geo:
         text.append(f"🌍 Geo Info: {geo.get('city')}, {geo.get('region')}, {geo.get('country')} | ISP: {geo.get('isp')}\n")
 
-    panel = Panel(text, title="🔍 Alert Summary", expand=False)
-    console.print(panel)
+    console.rule("[bold cyan]🔍 Alert Summary")
+    console.print(text, style="cyan")
 
     console.rule("[bold green]🎯 Recommended Actions")
     explain_alert(alert)
     recommend_response(alert)
 
+    if seen_ids is not None:
+        seen_ids.add(alert.get("id"))
 
-def watch_alerts_file(filepath="/var/ossec/logs/alerts/alerts.json", min_level=0):
-    console.print(f"\n📡 Listening for new alerts in: [bold green]{filepath}[/bold green]\n")
+def watch_alerts_file(filepath, export_dir=None, filter_level=None):
+    seen_ids = set()
+    console.print(f"📡 Listening for new alerts in: {filepath}")
     try:
         with open(filepath, "r") as f:
             f.seek(0, os.SEEK_END)
             while True:
                 line = f.readline()
                 if not line:
-                    time.sleep(0.5)
+                    time.sleep(1)
                     continue
                 try:
                     alert = json.loads(line)
-                    rule_level = alert.get("rule", {}).get("level", 0)
-                    if rule_level >= min_level:
-                        all_alerts.append(alert)
-                        process_alert(alert, min_level)
+                    level = alert.get("rule", {}).get("level", 0)
+                    if filter_level and level < filter_level:
+                        continue
+                    process_alert(alert, seen_ids)
+
+                    if export_dir:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        filename = f"alert_{timestamp}.html"
+                        os.makedirs(export_dir, exist_ok=True)
+                        generate_html_report(alert, os.path.join(export_dir, filename))
+
                 except Exception as e:
-                    console.print(f"[red]⚠️ Skipped malformed alert:[/red] {e}")
-    except KeyboardInterrupt:
-        if all_alerts:
-            export_dir = "exports"
-            os.makedirs(export_dir, exist_ok=True)
+                    console.print(f"⚠️ Skipped malformed alert: {e}")
+    except FileNotFoundError:
+        console.print(f"❌ File not found: {filepath}")
+
+def interactive_prompt():
+    console.print("\n[bold cyan]SOCscribe Setup Wizard[/bold cyan]")
+
+    mode = Prompt.ask("Choose mode", choices=["watch", "file"], default="file")
+
+    if mode == "watch":
+        filepath = Prompt.ask("Path to live alerts JSON file", default="/var/ossec/logs/alerts/alerts.json")
+        level_choice = IntPrompt.ask("Filter level (1=critical only, 5=medium and up, 10=all)", default=10)
+        export = Confirm.ask("Export each alert to HTML?", default=False)
+        export_dir = Prompt.ask("Export directory", default="exports") if export else None
+        watch_alerts_file(filepath, export_dir, level_choice)
+    else:
+        filepath = Prompt.ask("Path to alert JSON file")
+        if not os.path.isfile(filepath):
+            console.print(f"❌ File not found: {filepath}")
+            return
+        level_choice = IntPrompt.ask("Minimum level to include (optional, press Enter to skip)", default=0)
+        with open(filepath, "r") as f:
+            alert = json.load(f)
+        if alert.get("rule", {}).get("level", 0) < level_choice:
+            console.print("🚫 Alert below selected level.")
+            return
+
+        process_alert(alert)
+
+        if Confirm.ask("Export to HTML?", default=True):
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_path = os.path.join(export_dir, f"live_session_{timestamp}.html")
-            generate_html_report(all_alerts, output_path)
-            console.print(f"\n💾 Exported session report to: [bold cyan]{output_path}[/bold cyan]\n")
-        else:
-            console.print("\n⚠️ No alerts were captured during this session.")
-
-
-def main():
-    parser = argparse.ArgumentParser(description="SOCscribe - SOC Alert Triage Assistant")
-    parser.add_argument("parse", nargs="?", help="Path to a single alert JSON file")
-    parser.add_argument("--watch", nargs="?", const="/var/ossec/logs/alerts/alerts.json", help="Live mode — optional path to alert file")
-    parser.add_argument("--export", help="Directory to save HTML report (optional)")
-    parser.add_argument("--open", action="store_true", help="Open report in browser after export")
-    parser.add_argument("--filter-level", type=int, default=0, help="Minimum alert level to process")
-    args = parser.parse_args()
-
-    if not args.watch and not args.parse:
-        console.print("\n[bold yellow]Choose an option:[/bold yellow]")
-        console.print("1. Live Watch Mode")
-        console.print("2. Parse a Single Alert File\n")
-        choice = input("Enter choice (1 or 2): ")
-
-        if choice == "1":
-            # Open watch mode in new terminal
-            watch_command = f"python3 {__file__} --watch --filter-level {args.filter_level}"
-            subprocess.Popen(["gnome-terminal", "--", "bash", "-c", watch_command])
-            console.print("\n📡 [bold green]Live watch started in new terminal[/bold green]")
-            return
-        elif choice == "2":
-            alert_path = input("Enter path to alert JSON file: ")
-            args.parse = alert_path
-        else:
-            console.print("[red]❌ Invalid choice. Exiting.[/red]")
-            return
-
-    if args.watch:
-        watch_alerts_file(filepath=args.watch, min_level=args.filter_level)
-        return
-
-    if args.parse:
-        try:
-            with open(args.parse, "r") as f:
-                alert = json.load(f)
-
-            process_alert(alert, min_level=args.filter_level)
-
-            if args.export:
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"report_{timestamp}.html"
-                os.makedirs(args.export, exist_ok=True)
-                output_path = os.path.join(args.export, filename)
-                generate_html_report(alert, output_path)
-                print(f"\n📄 Report saved to: {output_path}")
-
-                if args.open:
-                    webbrowser.open(f"file://{os.path.abspath(output_path)}")
-                    print("🌐 Report opened in browser.")
-        except Exception as e:
-            print(f"❌ Failed to parse alert: {e}")
+            output_dir = Prompt.ask("Export directory", default="exports")
+            os.makedirs(output_dir, exist_ok=True)
+            outpath = os.path.join(output_dir, f"report_{timestamp}.html")
+            generate_html_report(alert, outpath)
+            console.print(f"✅ Report saved to: {outpath}")
+            if Confirm.ask("Open in browser?", default=False):
+                webbrowser.open(f"file://{os.path.abspath(outpath)}")
 
 if __name__ == "__main__":
-    main()
+    interactive_prompt()
