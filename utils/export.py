@@ -4,7 +4,6 @@ import json
 from utils.enrich import enrich_ip
 from triage.recommend import recommend_response
 
-
 try:
     from utils.enrich import enrich_virustotal
 except ImportError:
@@ -56,7 +55,6 @@ def generate_html_report(alerts, output_path):
             hash_val = hashlib.sha256(full_log.encode()).hexdigest()
             vt_data = enrich_virustotal(hash_val, vt_key)
 
-        # Start panel for alert
         html += f"""
         <div class="panel">
             <h2>🚨 Alert ID: {alert.get('id')}</h2>
@@ -67,11 +65,10 @@ def generate_html_report(alerts, output_path):
         """
 
         mitre = rule.get("mitre", {})
-        if mitre:
-            html += f"""
-            <p><strong>MITRE Tactic:</strong> {mitre.get("tactic", "Unknown")}<br/>
-            <strong>Technique:</strong> {mitre.get("technique", "Unknown")} ({mitre.get("id", "-")})</p>
-            """
+        html += f"""
+        <p><strong>MITRE Tactic:</strong> {mitre.get("tactic", "Unknown")}<br/>
+        <strong>Technique:</strong> {mitre.get("technique", "Unknown")} ({mitre.get("id", "-")})</p>
+        """
 
         if ip_data.get("geo"):
             geo = ip_data["geo"]
@@ -93,18 +90,31 @@ def generate_html_report(alerts, output_path):
             html += f"<li>{a}</li>"
         html += "</ul>"
 
-        # Role guidance
+        # Role recommendation
         html += "<h3>🧑‍💼 Who Should Investigate This?</h3><p>"
+
+        tactic_raw = mitre.get("tactic", "")
+        if isinstance(tactic_raw, list):
+            tactic = [t.lower() for t in tactic_raw]
+        else:
+            tactic = [tactic_raw.lower()]
+
+        technique = mitre.get("technique", "")
+        if isinstance(technique, list):
+            technique = ", ".join(technique)
+        technique = technique.lower()
+
         if "brute force" in description.lower():
             html += "This can be handled by a <strong>Tier 1 SOC Analyst</strong>.<br/><em>(Likely login abuse or scanning.)</em>"
-        elif mitre.get("tactic", "").lower() in ["persistence", "privilege escalation"]:
-            html += "Escalate to <strong>Threat Hunter</strong> or <strong>Incident Responder</strong>.<br/><em>(Possible lateral movement.)</em>"
-        elif mitre.get("technique", "").lower().startswith("malicious file"):
+        elif "persistence" in tactic or "privilege escalation" in tactic:
+            html += "This should be escalated to a <strong>Threat Hunter</strong> or <strong>Incident Responder</strong>.<br/><em>(Possible lateral movement or deeper access attempts.)</em>"
+        elif technique.startswith("malicious file"):
             html += "A <strong>Malware Analyst</strong> should inspect this file.<br/><em>(Suspicious payload involved.)</em>"
-        elif "exfiltration" in mitre.get("tactic", "").lower():
-            html += "Escalate to <strong>SOC Lead</strong>.<br/><em>(Potential data breach.)</em>"
+        elif "exfiltration" in tactic:
+            html += "Escalate to a <strong>SOC Lead</strong>.<br/><em>(Potential data breach.)</em>"
         else:
             html += "Start with a <strong>Tier 1 SOC Analyst</strong>.<br/><em>Escalate if needed.</em>"
+
         html += "</p></div>"
 
     html += "</body></html>"
