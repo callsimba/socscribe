@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set your OpenAI API key from the environment
-openai.api_key = os.getenv("OPENAI_API_KEY", "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")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # Store cache to avoid repeated API calls
 description_cache = {}
