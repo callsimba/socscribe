@@ -7,7 +7,7 @@ try:
 except ImportError:
     enrich_virustotal = None
 
-def generate_html_report(alert, output_path, output_format="html"):
+def generate_html_report(alert, output_path):
     rule = alert.get("rule", {})
     src_ip = alert.get("srcip", "N/A")
     timestamp = alert.get("timestamp", "N/A")
@@ -85,17 +85,5 @@ def generate_html_report(alert, output_path, output_format="html"):
         html += f"<li>{a}</li>"
     html += "</ul></div></body></html>"
 
-    # Export logic
-    if output_format == "pdf":
-        import pdfkit
-        options = {
-            'quiet': '',
-            'no-outline': None,
-            'disable-smart-shrinking': None,
-            'enable-local-file-access': None,
-            'page-size': 'A4',
-        }
-        pdfkit.from_string(html, output_path, options=options)
-    else:
-        with open(output_path, "w") as f:
-            f.write(html)
+    with open(output_path, "w") as f:
+        f.write(html)

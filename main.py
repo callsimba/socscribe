@@ -9,8 +9,7 @@ from utils.export import generate_html_report
 def main():
     parser = argparse.ArgumentParser(description="SOCscribe - SOC Alert Triage Assistant")
     parser.add_argument("parse", help="Path to the Wazuh alert JSON file")
-    parser.add_argument("--export", help="Directory to save report (optional)", default=None)
-    parser.add_argument("--export-format", help="html or pdf (default: html)", choices=["html", "pdf"], default="html")
+    parser.add_argument("--export", help="Directory to save HTML report (optional)", default=None)
     args = parser.parse_args()
 
     try:
@@ -27,9 +26,9 @@ def main():
 
         if args.export:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"report_{timestamp}.{args.export_format}"
+            filename = f"report_{timestamp}.html"
             output_path = os.path.join(args.export, filename)
-            generate_html_report(alert, output_path, output_format=args.export_format)
+            generate_html_report(alert, output_path)
             print(f"\n📄 Report saved to: {output_path}")
 
     except Exception as e:
