@@ -1,5 +1,5 @@
 from rich.console import Console
-from rich.text import Text
+from rich.panel import Panel
 import json, os
 
 console = Console()
@@ -11,23 +11,28 @@ def explain_alert(alert):
     host = alert.get("agent", {}).get("name", "unknown")
     rule_id = str(rule.get("id"))
 
-    console.print(f"[bold red]🚨 Alert ID:[/] {alert.get('id')}")
-    console.print(f"[bold yellow]🕒 Timestamp:[/] {timestamp}")
-    console.print(f"[bold cyan]💻 Host:[/] {host}")
-    console.print(f"[bold magenta]🌐 Source IP:[/] {src_ip}")
-    console.print(f"[bold green]📜 Description:[/] {rule.get('description')}")
-
     data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'playbooks.json')
+    mitre_output = ""
     try:
         with open(data_path, "r") as f:
             playbooks = json.load(f)
 
         if rule_id in playbooks:
             mitre = playbooks[rule_id]
-            console.print(f"[bold white]🧠 MITRE Tactic:[/] {mitre['tactic']}")
-            console.print(f"[bold white]🛠 Technique:[/] {mitre['technique']} ({mitre['technique_id']})")
+            mitre_output = f"[bold white]🧠 MITRE Tactic:[/] {mitre['tactic']}\n[bold white]🛠 Technique:[/] {mitre['technique']} ({mitre['technique_id']})"
         else:
-            console.print("[bold white]🧠 MITRE Tactic:[/] Unknown")
-            console.print("[bold white]🛠 Technique:[/] Unknown")
+            mitre_output = "[bold white]🧠 MITRE Tactic:[/] Unknown\n[bold white]🛠 Technique:[/] Unknown"
     except Exception as e:
-        console.print(f"[red]❌ Error loading MITRE mapping: {e}")
+        mitre_output = f"[red]❌ Error loading MITRE mapping: {e}"
+
+    # Display all in a formatted panel
+    panel_text = f"""
+[bold red]🚨 Alert ID:[/] {alert.get('id')}
+[bold yellow]🕒 Timestamp:[/] {timestamp}
+[bold cyan]💻 Host:[/] {host}
+[bold magenta]🌐 Source IP:[/] {src_ip}
+[bold green]📜 Description:[/] {rule.get('description')}
+
+{mitre_output}
+    """
+    console.print(Panel(panel_text.strip(), title="[bold blue]🔍 Alert Summary", expand=False))
