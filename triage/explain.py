@@ -1,5 +1,8 @@
-import os
-import json
+from rich.console import Console
+from rich.text import Text
+import json, os
+
+console = Console()
 
 def explain_alert(alert):
     rule = alert.get("rule", {})
@@ -8,25 +11,23 @@ def explain_alert(alert):
     host = alert.get("agent", {}).get("name", "unknown")
     rule_id = str(rule.get("id"))
 
-    print(f"🚨 Alert ID: {alert.get('id')}")
-    print(f"🕒 Timestamp: {timestamp}")
-    print(f"💻 Host: {host}")
-    print(f"🌐 Source IP: {src_ip}")
-    print(f"📜 Description: {rule.get('description')}")
+    console.print(f"[bold red]🚨 Alert ID:[/] {alert.get('id')}")
+    console.print(f"[bold yellow]🕒 Timestamp:[/] {timestamp}")
+    console.print(f"[bold cyan]💻 Host:[/] {host}")
+    console.print(f"[bold magenta]🌐 Source IP:[/] {src_ip}")
+    console.print(f"[bold green]📜 Description:[/] {rule.get('description')}")
 
-    # Load MITRE data from playbooks.json
     data_path = os.path.join(os.path.dirname(__file__), '..', 'data', 'playbooks.json')
-
     try:
         with open(data_path, "r") as f:
             playbooks = json.load(f)
 
         if rule_id in playbooks:
             mitre = playbooks[rule_id]
-            print(f"🧠 MITRE Tactic: {mitre['tactic']}")
-            print(f"🛠 Technique: {mitre['technique']} ({mitre['technique_id']})")
+            console.print(f"[bold white]🧠 MITRE Tactic:[/] {mitre['tactic']}")
+            console.print(f"[bold white]🛠 Technique:[/] {mitre['technique']} ({mitre['technique_id']})")
         else:
-            print("🧠 MITRE Tactic: Unknown")
-            print("🛠 Technique: Unknown")
+            console.print("[bold white]🧠 MITRE Tactic:[/] Unknown")
+            console.print("[bold white]🛠 Technique:[/] Unknown")
     except Exception as e:
-        print(f"❌ Error loading MITRE mapping: {e}")
+        console.print(f"[red]❌ Error loading MITRE mapping: {e}")

@@ -1,5 +1,7 @@
-import json
-import os
+from rich.console import Console
+import os, json
+
+console = Console()
 
 def recommend_response(alert):
     rule_id = str(alert.get("rule", {}).get("id"))
@@ -11,9 +13,9 @@ def recommend_response(alert):
 
         if rule_id in playbooks:
             for action in playbooks[rule_id]["actions"]:
-                print(f"- {action}")
+                console.print(f"[green]- {action}[/]")
         else:
-            print("- No specific playbook found for this rule.")
-            print("- Review logs, check user/process/IP behavior manually.")
+            console.print("[yellow]- No specific playbook found for this rule.")
+            console.print("[yellow]- Review logs, check user/process/IP behavior manually.")
     except Exception as e:
-        print(f"❌ Error loading playbooks: {e}")
+        console.print(f"[red]❌ Error loading playbooks: {e}")
