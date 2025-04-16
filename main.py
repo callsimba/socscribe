@@ -1,14 +1,37 @@
+from utils.flatten import flatten_dict
+def calculate_severity(alert):
+    rule = alert.get("rule", {})
+    flat = flatten_dict(alert)
+    desc = rule.get("description", "").lower()
+    mitre_id = str(rule.get("mitre", {}).get("id", "")).lower()
+    fired = int(rule.get("firedtimes", 0))
+    cmd = flat.get("data.win.eventdata.commandLine", "").lower()
+    parent = flat.get("data.win.eventdata.parentImage", "").lower()
+    image = flat.get("data.win.eventdata.image", "").lower()
+    logon_type = flat.get("data.win.eventdata.logonType", "")
+    high_tactics = ["t1059", "t1105", "t1547", "t1021", "t1218", "t1566", "t1055", "t1112"]
+    if any(mitre_id.startswith(tid) for tid in high_tactics):
+        return 10
+    if any(tool in image for tool in ["rundll32", "regsvr32", "mshta", "wmic", "powershell", "cmd.exe"]):
+        return 9
+    if logon_type in ["3", "10"]:
+        return 8
+    if fired >= 5:
+        return 7
+    if any(x in cmd for x in ["invoke-", "downloadfile", "bypass", "base64"]):
+        return 7
+    if any(x in parent for x in ["powershell", "wscript", "cscript"]):
+        return 6
+    return int(rule.get("level", 0))
 import os
 import time
 import json
 from datetime import datetime
 from rich.console import Console
 from utils.export import export_alerts
-
 console = Console()
 alerts = []
 ALERT_LOG_PATH = os.path.expanduser("~/wazuh-logs/alerts.json")
-
 def tail_alerts():
     seen = set()
     console.print(f"📡 Listening for new alerts in: [bold yellow]{ALERT_LOG_PATH}[/bold yellow]")
@@ -24,15 +47,13 @@ def tail_alerts():
                                 seen.add(alert_id)
                                 timestamp = alert.get("timestamp", "").replace("T", " @ ").split(".")[0]
                                 summary = alert.get("rule", {}).get("description", "[No Description]")
-                                level = int(alert.get("rule", {}).get("level", 0))
-
+                                level = calculate_severity(alert)
                                 if level >= 10:
                                     tag = "🔴 High"
                                 elif level >= 6:
                                     tag = "🟠 Medium"
                                 else:
                                     tag = "🟢 Low"
-
                                 console.print(f"[cyan]{timestamp}[/cyan]  {summary} [{tag} Severity]")
                                 alerts.append(alert)
                         except json.JSONDecodeError:
@@ -43,7 +64,6 @@ def tail_alerts():
             except PermissionError:
                 console.print(f"[red]❌ Permission denied: {ALERT_LOG_PATH}[/red]")
                 break
-
             time.sleep(2)
     except KeyboardInterrupt:
         console.print("\n[bold yellow]⏹️ Detected Ctrl+C — exporting alerts...[/bold yellow]")
@@ -54,7 +74,6 @@ def tail_alerts():
         export_alerts(alerts, output_path)
         console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
         exit()
-
 def load_file_and_export():
     with open(ALERT_LOG_PATH, 'r') as f:
         for line in f:
@@ -63,15 +82,12 @@ def load_file_and_export():
                 alerts.append(alert)
             except json.JSONDecodeError:
                 continue
-
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     export_dir = os.path.join(os.getcwd(), "exports")
     os.makedirs(export_dir, exist_ok=True)
     output_path = os.path.join(export_dir, f"report_{timestamp}.html")
-
     export_alerts(alerts, output_path)
     console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
-
 def main():
     console.print("""
 [bold magenta]─────────────────────────────────────────── SOCscribe Setup Wizard ───────────────────────────────────────────[/bold magenta]
@@ -84,6 +100,5 @@ Choose mode:
         tail_alerts()
     else:
         load_file_and_export()
-
 if __name__ == "__main__":
     main()
