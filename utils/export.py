@@ -66,7 +66,7 @@ def export_alerts(alerts, output_path):
 
         lvl = int(rule.get("level", 0))
         mitre_id = rule.get("mitre", {}).get("id", "")
-        if isinstance(mitre_id, list):  # 🔧 fix for list-type MITRE ID
+        if isinstance(mitre_id, list):
             mitre_id = mitre_id[0] if mitre_id else ""
         if lvl >= 10: high += 1
         elif lvl >= 6: medium += 1
@@ -92,7 +92,7 @@ def export_alerts(alerts, output_path):
         strong[title] {{ border-bottom: 1px dotted #999; cursor: help; }}
         .filter-bar {{ background: #fff; padding: 10px 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; }}
         .filter-bar button {{ margin-right: 10px; padding: 6px 12px; }}
-        .filter-bar input {{ padding: 6px; width: 200px; }}
+        .filter-bar input {{ padding: 6px; width: 230px; margin-right: 10px; }}
         .hidden {{ display: none; }}
     </style>
 </head>
@@ -104,8 +104,8 @@ def export_alerts(alerts, output_path):
   <button onclick="filterBySeverity('medium')">🟠 Medium</button>
   <button onclick="filterBySeverity('low')">🟢 Low</button>
   <button onclick="resetFilters()">Reset</button>
-  <input type="date" id="startDate" onchange="filterByDate()">
-  <input type="date" id="endDate" onchange="filterByDate()">
+  <input type="datetime-local" id="startDate" onchange="filterByDate()">
+  <input type="datetime-local" id="endDate" onchange="filterByDate()">
   <input type="text" id="searchBox" placeholder="Search MITRE or text..." onkeyup="searchText()">
 </div>
 
@@ -121,12 +121,10 @@ def export_alerts(alerts, output_path):
             ts = alert.get("timestamp", "")
             tag = alert["_severity_tag"]
             mitre = alert["_mitre"]
-            aid = alert.get("id", "")
             desc = alert.get("rule", {}).get("description", "No description")
 
             html += f"""<div class="panel alert" data-severity="{alert['_severity']}" data-timestamp="{ts}" data-mitre="{mitre.lower()}">
                 <h3>🚨 {desc} — {tag}</h3>
-                <p><strong>Timestamp:</strong> {ts}</p>
                 {generate_field_blocks(alert)}
                 <h3>🎯 Recommended Actions</h3><ul>"""
             for r in generate_custom_recommendations(alert):
@@ -165,11 +163,17 @@ function resetFilters() {
 }
 
 function filterByDate() {
-  let start = new Date(document.getElementById('startDate').value);
-  let end = new Date(document.getElementById('endDate').value);
+  let startInput = document.getElementById('startDate').value;
+  let endInput = document.getElementById('endDate').value;
+  let start = startInput ? new Date(startInput) : null;
+  let end = endInput ? new Date(endInput) : null;
+
   document.querySelectorAll('.panel.alert').forEach(el => {
     let ts = new Date(el.dataset.timestamp);
-    el.classList.toggle('hidden', (start && ts < start) || (end && ts > end));
+    let show = true;
+    if (start && ts < start) show = false;
+    if (end && ts > end) show = false;
+    el.classList.toggle('hidden', !show);
   });
 }
 
