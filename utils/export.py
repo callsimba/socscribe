@@ -4,11 +4,6 @@ from utils.enrich import enrich_ip
 from triage.recommend import recommend_response
 from triage.field_explanations import get_field_explanation
 
-try:
-    from utils.enrich import enrich_virustotal
-except ImportError:
-    enrich_virustotal = None
-
 def flatten_json(y, parent_key='', sep='.'):
     items = []
     for k, v in y.items():
@@ -21,11 +16,11 @@ def flatten_json(y, parent_key='', sep='.'):
 
 def generate_severity_tag(level):
     if level >= 10:
-        return "<span style='color:red;font-weight:bold'>🔴 High</span>"
+        return ("high", "<span style='color:red;font-weight:bold'>🔴 High</span>")
     elif level >= 6:
-        return "<span style='color:orange;font-weight:bold'>🟠 Medium</span>"
+        return ("medium", "<span style='color:orange;font-weight:bold'>🟠 Medium</span>")
     else:
-        return "<span style='color:green;font-weight:bold'>🟢 Low</span>"
+        return ("low", "<span style='color:green;font-weight:bold'>🟢 Low</span>")
 
 def generate_highlight_comment(key, value):
     v = str(value).lower()
@@ -100,6 +95,8 @@ def generate_custom_recommendations(alert):
 def export_alerts(alerts, output_path):
     total = len(alerts)
     high = medium = low = mitre_hits = 0
+    panels = []
+
     for a in alerts:
         lvl = int(a.get("rule", {}).get("level", 0))
         mitre_id = str(a.get("rule", {}).get("mitre", {}).get("id", "")).lower()
@@ -108,20 +105,60 @@ def export_alerts(alerts, output_path):
         else: low += 1
         if any(x in mitre_id for x in ["t1059", "t1105", "t1547"]): mitre_hits += 1
 
+        rule = a.get("rule", {})
+        desc = rule.get("description", "No description")
+        alert_id = a.get("id", "Unknown")
+        lvl = int(rule.get("level", 0))
+        severity_key, severity_tag = generate_severity_tag(lvl)
+
+        panel = f"""
+        <div class="panel alert" data-severity="{severity_key}">
+            <h2>🚨 Alert ID: {alert_id}</h2>
+            <h3>{desc} — {severity_tag}</h3>
+            {generate_field_blocks(a)}
+            <h3>🎯 Recommended Actions</h3>
+            <ul>
+                {''.join(f"<li>{r}</li>" for r in generate_custom_recommendations(a))}
+            </ul>
+        </div>
+        """
+        panels.append(panel)
+
     html = f"""
     <html>
     <head>
         <title>SOCscribe Alert Report</title>
         <style>
             body {{ font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }}
-            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; }}
+            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; transition: all 0.3s ease-in-out; }}
             h2 {{ color: #003366; }}
             h3 {{ color: #006699; }}
-            code {{ background: #eee; padding: 2px 4px; border-radius: 4px; }}
-            em {{ color: #666; font-size: 0.9em; }}
             details {{ margin-top: 5px; font-size: 0.9em; }}
             summary {{ cursor: pointer; color: #444; }}
+            button {{ margin-right: 10px; padding: 5px 12px; font-weight: bold; }}
         </style>
+        <script>
+            function sortAlerts(level) {{
+                const panels = [...document.querySelectorAll('.alert')];
+                const container = document.getElementById('alerts');
+                panels.sort((a, b) => {{
+                    if (a.dataset.severity === level) return -1;
+                    if (b.dataset.severity === level) return 1;
+                    return 0;
+                }});
+                panels.forEach(p => container.appendChild(p));
+            }}
+            function filterAlerts(level) {{
+                const panels = document.querySelectorAll('.alert');
+                panels.forEach(p => {{
+                    p.style.display = p.dataset.severity === level ? 'block' : 'none';
+                }});
+            }}
+            function resetAlerts() {{
+                const panels = document.querySelectorAll('.alert');
+                panels.forEach(p => p.style.display = 'block');
+            }}
+        </script>
     </head>
     <body>
         <h1>SOCscribe Alerts Report</h1>
@@ -132,30 +169,22 @@ def export_alerts(alerts, output_path):
             <p><strong>🟠 Medium Severity:</strong> {medium}</p>
             <p><strong>🟢 Low Severity:</strong> {low}</p>
             <p><strong>🧠 MITRE TTP Hits:</strong> {mitre_hits}</p>
+            <div>
+                <button onclick="sortAlerts('high')">Sort by High</button>
+                <button onclick="sortAlerts('medium')">Sort by Medium</button>
+                <button onclick="sortAlerts('low')">Sort by Low</button>
+                <button onclick="filterAlerts('high')">Show Only High</button>
+                <button onclick="filterAlerts('medium')">Show Only Medium</button>
+                <button onclick="filterAlerts('low')">Show Only Low</button>
+                <button onclick="resetAlerts()">Reset View</button>
+            </div>
         </div>
+        <div id="alerts">
+            {''.join(panels)}
+        </div>
+    </body>
+    </html>
     """
-
-    for alert in alerts:
-        rule = alert.get("rule", {})
-        description = rule.get("description", "No description")
-        alert_id = alert.get("id", "Unknown")
-        level = int(rule.get("level", 0))
-        severity_tag = generate_severity_tag(level)
-
-        html += f"""
-        <div class="panel" data-severity="{severity_tag}">
-            <h2>🚨 Alert ID: {alert_id}</h2>
-            <h3>{description} — {severity_tag}</h3>
-        """
-
-        html += generate_field_blocks(alert)
-
-        html += "<h3>🎯 Recommended Actions</h3><ul>"
-        for r in generate_custom_recommendations(alert):
-            html += f"<li>{r}</li>"
-        html += "</ul></div>"
-
-    html += "</body></html>"
 
     with open(output_path, "w") as f:
         f.write(html)
