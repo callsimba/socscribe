@@ -3,6 +3,7 @@ import json
 from utils.enrich import enrich_ip
 from triage.recommend import recommend_response
 from triage.field_explanations import get_field_explanation
+from utils.mitre_index import get_investigation_tips
 
 def flatten_json(y, parent_key='', sep='.'):
     items = []
@@ -52,7 +53,7 @@ def generate_field_blocks(alert):
         highlight = generate_highlight_comment(key, value)
         comment_html = f"<br/><em style='color:red'>{highlight}</em>" if highlight else ""
         blocks += f"""
-        <p><strong>{key}:</strong> {value}
+        <p><strong title="{explanation}">{key}:</strong> {value}
         <details><summary>What does this mean?</summary>
         <em>{explanation}{comment_html}</em>
         </details></p>
@@ -120,8 +121,25 @@ def export_alerts(alerts, output_path):
             <ul>
                 {''.join(f"<li>{r}</li>" for r in generate_custom_recommendations(a))}
             </ul>
-        </div>
         """
+
+        mitre_id_upper = str(a.get("rule", {}).get("mitre", {}).get("id", "")).upper()
+        if mitre_id_upper:
+            tips = get_investigation_tips(mitre_id_upper)
+            mitre_link = f"https://attack.mitre.org/techniques/{tips['title'].split(' – ')[0]}"
+            panel += f"""<h3>🧠 MITRE Technique: <a href="{mitre_link}" target="_blank">{tips['title']}</a></h3>"""
+
+            panel += "<details><summary>What to Investigate</summary><ul>"
+            for step in tips["what"]:
+                panel += f"<li>{step}</li>"
+            panel += "</ul></details>"
+
+            panel += "<details><summary>Where to Check</summary><ul>"
+            for src in tips["where"]:
+                panel += f"<li>{src}</li>"
+            panel += "</ul></details>"
+
+        panel += "</div>"
         panels.append(panel)
 
     html = f"""
@@ -130,35 +148,12 @@ def export_alerts(alerts, output_path):
         <title>SOCscribe Alert Report</title>
         <style>
             body {{ font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }}
-            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; transition: all 0.3s ease-in-out; }}
+            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; }}
             h2 {{ color: #003366; }}
             h3 {{ color: #006699; }}
             details {{ margin-top: 5px; font-size: 0.9em; }}
             summary {{ cursor: pointer; color: #444; }}
-            button {{ margin-right: 10px; padding: 5px 12px; font-weight: bold; }}
         </style>
-        <script>
-            function sortAlerts(level) {{
-                const panels = [...document.querySelectorAll('.alert')];
-                const container = document.getElementById('alerts');
-                panels.sort((a, b) => {{
-                    if (a.dataset.severity === level) return -1;
-                    if (b.dataset.severity === level) return 1;
-                    return 0;
-                }});
-                panels.forEach(p => container.appendChild(p));
-            }}
-            function filterAlerts(level) {{
-                const panels = document.querySelectorAll('.alert');
-                panels.forEach(p => {{
-                    p.style.display = p.dataset.severity === level ? 'block' : 'none';
-                }});
-            }}
-            function resetAlerts() {{
-                const panels = document.querySelectorAll('.alert');
-                panels.forEach(p => p.style.display = 'block');
-            }}
-        </script>
     </head>
     <body>
         <h1>SOCscribe Alerts Report</h1>
@@ -169,15 +164,6 @@ def export_alerts(alerts, output_path):
             <p><strong>🟠 Medium Severity:</strong> {medium}</p>
             <p><strong>🟢 Low Severity:</strong> {low}</p>
             <p><strong>🧠 MITRE TTP Hits:</strong> {mitre_hits}</p>
-            <div>
-                <button onclick="sortAlerts('high')">Sort by High</button>
-                <button onclick="sortAlerts('medium')">Sort by Medium</button>
-                <button onclick="sortAlerts('low')">Sort by Low</button>
-                <button onclick="filterAlerts('high')">Show Only High</button>
-                <button onclick="filterAlerts('medium')">Show Only Medium</button>
-                <button onclick="filterAlerts('low')">Show Only Low</button>
-                <button onclick="resetAlerts()">Reset View</button>
-            </div>
         </div>
         <div id="alerts">
             {''.join(panels)}
