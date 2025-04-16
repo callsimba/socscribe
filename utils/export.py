@@ -4,7 +4,8 @@ from datetime import datetime
 from triage.recommend import recommend_response
 from triage.field_explanations import get_field_explanation
 from utils.mitre_index import get_investigation_tips
-from utils.flatten import flatten_json
+from utils.flatten import flatten_dict as flatten_json
+
 
 def generate_severity_tag(level):
     if level >= 10:
