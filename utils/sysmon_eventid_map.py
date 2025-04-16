@@ -1,4 +1,3 @@
-# utils/sysmon_eventid_map.py
 
 def explain_sysmon_event(event_id: str) -> dict:
     map = {

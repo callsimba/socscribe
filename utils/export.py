@@ -52,7 +52,6 @@ def generate_highlight_comment(key, value):
 def generate_field_blocks(alert):
     blocks = ""
     flat = flatten_json(alert)
-
     for key, value in flat.items():
         explanation = get_field_explanation(key)
         highlight = generate_highlight_comment(key, value)
@@ -73,7 +72,6 @@ def generate_custom_recommendations(alert):
     level = int(rule.get("level", 0))
     fired = int(rule.get("firedtimes", 0))
     description = rule.get("description", "").lower()
-
     cmd = flat.get("data.win.eventdata.commandLine", "").lower()
     img = flat.get("data.win.eventdata.image", "").lower()
 
@@ -97,13 +95,11 @@ def generate_custom_recommendations(alert):
         recs.append("🔐 Remote desktop session detected — confirm session legitimacy.")
     if not recs:
         recs.append("✅ No critical behavior detected — proceed with standard log review.")
-
     return recs
 
 def export_alerts(alerts, output_path):
-    # Summarize
     total = len(alerts)
-    high, medium, low, mitre_hits = 0, 0, 0, 0
+    high = medium = low = mitre_hits = 0
     for a in alerts:
         lvl = int(a.get("rule", {}).get("level", 0))
         mitre_id = str(a.get("rule", {}).get("mitre", {}).get("id", "")).lower()
@@ -125,7 +121,6 @@ def export_alerts(alerts, output_path):
             em {{ color: #666; font-size: 0.9em; }}
             details {{ margin-top: 5px; font-size: 0.9em; }}
             summary {{ cursor: pointer; color: #444; }}
-            .tag {{ font-weight: bold; padding: 2px 6px; border-radius: 4px; }}
         </style>
     </head>
     <body>
@@ -136,7 +131,7 @@ def export_alerts(alerts, output_path):
             <p><strong>🔴 High Severity:</strong> {high}</p>
             <p><strong>🟠 Medium Severity:</strong> {medium}</p>
             <p><strong>🟢 Low Severity:</strong> {low}</p>
-            <p><strong>🧠 MITRE TTP Hits (e.g., T1059, T1105):</strong> {mitre_hits}</p>
+            <p><strong>🧠 MITRE TTP Hits:</strong> {mitre_hits}</p>
         </div>
     """
 
@@ -148,7 +143,7 @@ def export_alerts(alerts, output_path):
         severity_tag = generate_severity_tag(level)
 
         html += f"""
-        <div class="panel">
+        <div class="panel" data-severity="{severity_tag}">
             <h2>🚨 Alert ID: {alert_id}</h2>
             <h3>{description} — {severity_tag}</h3>
         """
@@ -156,8 +151,7 @@ def export_alerts(alerts, output_path):
         html += generate_field_blocks(alert)
 
         html += "<h3>🎯 Recommended Actions</h3><ul>"
-        recs = generate_custom_recommendations(alert)
-        for r in recs:
+        for r in generate_custom_recommendations(alert):
             html += f"<li>{r}</li>"
         html += "</ul></div>"
 

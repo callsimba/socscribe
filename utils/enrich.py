@@ -3,7 +3,6 @@ import requests
 def enrich_ip(ip, abuseipdb_key=None):
     enrichment = {}
 
-    # 1. Geo Info from ip-api
     try:
         geo_resp = requests.get(f"http://ip-api.com/json/{ip}?fields=country,regionName,city,isp,org")
         if geo_resp.status_code == 200:
@@ -18,7 +17,7 @@ def enrich_ip(ip, abuseipdb_key=None):
     except:
         enrichment["geo"] = {"error": "Geo lookup failed"}
 
-    # 2. AbuseIPDB (Optional)
+    #AbuseIPDB (Optional)
     if abuseipdb_key:
         try:
             headers = {

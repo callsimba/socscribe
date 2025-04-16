@@ -4,18 +4,18 @@ import hashlib
 import requests
 from dotenv import load_dotenv
 
-# Load .env variables
+
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = "mixtral-8x7b-32768"
 GROQ_ENDPOINT = "https://api.groq.com/openai/v1/chat/completions"
 
-# Local cache file to avoid repeated API calls
+
 description_cache = {}
 cache_file = "description_cache.json"
 
-# Load cache from disk
+
 if os.path.exists(cache_file):
     with open(cache_file, 'r') as f:
         try:
@@ -23,12 +23,12 @@ if os.path.exists(cache_file):
         except json.JSONDecodeError:
             description_cache = {}
 
-# Save cache to disk
+
 def save_cache():
     with open(cache_file, 'w') as f:
         json.dump(description_cache, f, indent=2)
 
-# Main function to fetch AI explanation
+
 def get_dynamic_description(field, value):
     if not GROQ_API_KEY:
         return "[Error] GROQ_API_KEY not set."

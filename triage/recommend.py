@@ -31,7 +31,7 @@ def recommend_response(alert, return_text=False):
                 else:
                     console.print(f"[yellow]{line}[/]")
     except Exception as e:
-        msg = f"❌ Error loading playbooks: {e}"
+        msg = f" Error loading playbooks: {e}"
         if return_text:
             output.append(msg)
         else:
