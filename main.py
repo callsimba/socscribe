@@ -29,9 +29,20 @@ def tail_alerts():
                             alert_id = alert.get("id")
                             if alert_id and alert_id not in seen:
                                 seen.add(alert_id)
+
                                 timestamp = alert.get("timestamp", "").replace("T", " @ ").split(".")[0]
                                 summary = alert.get("rule", {}).get("description", "[No Description]")
-                                console.print(f"[cyan]{timestamp}[/cyan]  {summary}")
+                                level = int(alert.get("rule", {}).get("level", 0))
+
+                                # Severity tag
+                                if level >= 10:
+                                    tag = "🔴 High"
+                                elif level >= 6:
+                                    tag = "🟠 Medium"
+                                else:
+                                    tag = "🟢 Low"
+
+                                console.print(f"[cyan]{timestamp}[/cyan]  {summary} [{tag} Severity]")
                                 alerts.append(alert)
                         except json.JSONDecodeError:
                             continue
@@ -52,7 +63,6 @@ def tail_alerts():
         export_alerts(alerts, output_path)
         console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
         exit()
-
 
 # ───────────────────────────────────────────────────────────────
 # File mode: load all alerts and export immediately
