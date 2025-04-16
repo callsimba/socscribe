@@ -18,31 +18,41 @@ ALERT_LOG_PATH = os.path.expanduser("~/wazuh-logs/alerts.json")
 
 def tail_alerts():
     seen = set()
+    console.print(f"📡 Listening for new alerts in: [bold yellow]{ALERT_LOG_PATH}[/bold yellow]")
     try:
         while True:
-            with open(ALERT_LOG_PATH, 'r') as f:
-                for line in f:
-                    try:
-                        alert = json.loads(line)
-                        alert_id = alert.get("id")
-                        if alert_id and alert_id not in seen:
-                            seen.add(alert_id)
-                            timestamp = alert.get("timestamp", "").replace("T", " @ ").split(".")[0]
-                            summary = alert.get("rule", {}).get("description", "[No Description]")
-                            console.print(f"[cyan]{timestamp}[/cyan]  {summary}")
-                            alerts.append(alert)
-                    except json.JSONDecodeError:
-                        continue
+            try:
+                with open(ALERT_LOG_PATH, 'r') as f:
+                    for line in f:
+                        try:
+                            alert = json.loads(line)
+                            alert_id = alert.get("id")
+                            if alert_id and alert_id not in seen:
+                                seen.add(alert_id)
+                                timestamp = alert.get("timestamp", "").replace("T", " @ ").split(".")[0]
+                                summary = alert.get("rule", {}).get("description", "[No Description]")
+                                console.print(f"[cyan]{timestamp}[/cyan]  {summary}")
+                                alerts.append(alert)
+                        except json.JSONDecodeError:
+                            continue
+            except FileNotFoundError:
+                console.print(f"[red]❌ File not found: {ALERT_LOG_PATH}[/red]")
+                break
+            except PermissionError:
+                console.print(f"[red]❌ Permission denied: {ALERT_LOG_PATH}[/red]")
+                break
+
             time.sleep(2)
     except KeyboardInterrupt:
+        console.print("\n[bold yellow]⏹️ Detected Ctrl+C — exporting alerts...[/bold yellow]")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         export_dir = os.path.join(os.getcwd(), "exports")
         os.makedirs(export_dir, exist_ok=True)
         output_path = os.path.join(export_dir, f"report_{timestamp}.html")
-
         export_alerts(alerts, output_path)
         console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
         exit()
+
 
 # ───────────────────────────────────────────────────────────────
 # File mode: load all alerts and export immediately
