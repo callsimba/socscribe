@@ -4,8 +4,7 @@ from datetime import datetime
 from triage.recommend import recommend_response
 from triage.field_explanations import get_field_explanation
 from utils.mitre_index import get_investigation_tips
-from utils.flatten import flatten_dict as flatten_json
-
+from utils.flatten import flatten_dict as flatten_json  # alias fix
 
 def generate_severity_tag(level):
     if level >= 10:
@@ -67,6 +66,8 @@ def export_alerts(alerts, output_path):
 
         lvl = int(rule.get("level", 0))
         mitre_id = rule.get("mitre", {}).get("id", "")
+        if isinstance(mitre_id, list):  # 🔧 fix for list-type MITRE ID
+            mitre_id = mitre_id[0] if mitre_id else ""
         if lvl >= 10: high += 1
         elif lvl >= 6: medium += 1
         else: low += 1
@@ -74,6 +75,7 @@ def export_alerts(alerts, output_path):
 
         alert["_severity"], alert["_severity_tag"] = generate_severity_tag(lvl)
         alert["_tactic"] = tactic_key
+        alert["_mitre"] = mitre_id
         tactic_map.setdefault(tactic_key, []).append(alert)
 
     html = f"""<!DOCTYPE html>
@@ -118,7 +120,7 @@ def export_alerts(alerts, output_path):
         for alert in group:
             ts = alert.get("timestamp", "")
             tag = alert["_severity_tag"]
-            mitre = alert.get("rule", {}).get("mitre", {}).get("id", "")
+            mitre = alert["_mitre"]
             aid = alert.get("id", "")
             desc = alert.get("rule", {}).get("description", "No description")
 
@@ -165,10 +167,9 @@ function resetFilters() {
 function filterByDate() {
   let start = new Date(document.getElementById('startDate').value);
   let end = new Date(document.getElementById('endDate').value);
-  if (!start || !end) return;
   document.querySelectorAll('.panel.alert').forEach(el => {
     let ts = new Date(el.dataset.timestamp);
-    el.classList.toggle('hidden', ts < start || ts > end);
+    el.classList.toggle('hidden', (start && ts < start) || (end && ts > end));
   });
 }
 
