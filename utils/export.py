@@ -140,31 +140,75 @@ def export_alerts(alerts, output_path):
     html = f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>SOCscribe Report</title>
-    <style>
-        body {{ font-family: Arial; background: #f5f5f5; padding: 20px; }}
-        .panel {{ background: white; border-radius: 8px; box-shadow: 0 0 5px #ccc; padding: 20px; margin-bottom: 20px; }}
-        h2 {{ color: #003366; }}
-        h3 {{ color: #006699; }}
-        details {{ margin-top: 8px; }}
-        summary {{ cursor: pointer; }}
-        strong[title] {{ border-bottom: 1px dotted #999; cursor: help; }}
-    </style>
+  <title>SOCscribe Report</title>
+  <style>
+    body {{ font-family: Arial; background: #f5f5f5; padding: 20px; }}
+    .panel {{ background: white; border-radius: 8px; box-shadow: 0 0 5px #ccc; padding: 20px; margin-bottom: 20px; }}
+    h2 {{ color: #003366; }}
+    h3 {{ color: #006699; }}
+    details {{ margin-top: 8px; }}
+    summary {{ cursor: pointer; }}
+    strong[title] {{ border-bottom: 1px dotted #999; cursor: help; }}
+    .filter-bar {{ background: #fff; padding: 10px 20px; margin-bottom: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; }}
+    .filter-bar button {{ margin-right: 10px; padding: 6px 12px; }}
+    .filter-bar input {{ padding: 6px; width: 200px; }}
+    .hidden {{ display: none; }}
+  </style>
 </head>
 <body>
-    <h1>SOCscribe Alert Report</h1>
-    <div class="panel">
-        <h2>📊 Summary</h2>
-        <p><strong>Total Alerts:</strong> {total}</p>
-        <p><strong>🔴 High:</strong> {high}</p>
-        <p><strong>🟠 Medium:</strong> {medium}</p>
-        <p><strong>🟢 Low:</strong> {low}</p>
-        <p><strong>🧠 MITRE-related:</strong> {mitre_hits}</p>
-    </div>
+  <h1>SOCscribe Alert Report</h1>
+
+  <div class="filter-bar">
+    <button onclick="filterBySeverity('high')">🔴 High</button>
+    <button onclick="filterBySeverity('medium')">🟠 Medium</button>
+    <button onclick="filterBySeverity('low')">🟢 Low</button>
+    <button onclick="resetFilters()">Reset</button>
+    <input type="text" id="searchBox" placeholder="Search MITRE ID or content..." onkeyup="searchText()">
+  </div>
+
+  <div class="panel">
+    <h2>📊 Summary</h2>
+    <p><strong>Total Alerts:</strong> {total}</p>
+    <p><strong>🔴 High:</strong> {high}</p>
+    <p><strong>🟠 Medium:</strong> {medium}</p>
+    <p><strong>🟢 Low:</strong> {low}</p>
+    <p><strong>🧠 MITRE-related:</strong> {mitre_hits}</p>
+  </div>
+
+  <div id="alert-container">
     {''.join(panels)}
+  </div>
+
+  <script>
+    function filterBySeverity(sev) {{
+      const all = document.querySelectorAll('.panel.alert');
+      all.forEach(el => {{
+        if (el.dataset.severity === sev) {{
+          el.classList.remove('hidden');
+        }} else {{
+          el.classList.add('hidden');
+        }}
+      }});
+    }}
+
+    function resetFilters() {{
+      document.querySelectorAll('.panel.alert').forEach(el => el.classList.remove('hidden'));
+      document.getElementById('searchBox').value = "";
+    }}
+
+    function searchText() {{
+      const q = document.getElementById('searchBox').value.toLowerCase();
+      document.querySelectorAll('.panel.alert').forEach(el => {{
+        el.textContent.toLowerCase().includes(q)
+          ? el.classList.remove('hidden')
+          : el.classList.add('hidden');
+      }});
+    }}
+  </script>
 </body>
 </html>
 """
+
 
     with open(output_path, "w") as f:
         f.write(html)
