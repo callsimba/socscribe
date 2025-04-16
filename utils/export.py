@@ -133,7 +133,8 @@ def export_alerts(alerts, output_path):
 
             if mitre:
                 tips = get_investigation_tips(mitre)
-                link = f"https://attack.mitre.org/techniques/{mitre}"
+                parent_id = mitre.split('.')[0]
+                link = f"https://attack.mitre.org/techniques/{parent_id}"
                 html += f"""<h3>🧠 MITRE Technique: <a href="{link}" target="_blank">{tips['title']}</a></h3>"""
                 html += "<details><summary>What to Investigate</summary><ul>"
                 for w in tips["what"]:
