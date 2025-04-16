@@ -1,7 +1,7 @@
 import os
 import json
 
-
+# Global dictionary to store MITRE technique ID → title and tactic
 MITRE_LOOKUP = {}
 
 def resolve_parent_ttid(ttid: str) -> str:
@@ -11,16 +11,31 @@ def load_mitre_data():
     path = os.path.join(os.path.dirname(__file__), "../mitre.json")
     with open(path, "r") as f:
         data = json.load(f)
+
     for technique in data.get("techniques", []):
         tid = technique.get("external_id", "").upper()
+
+        # Fallback: Extract from external_references if external_id missing
+        if not tid:
+            refs = technique.get("external_references", [])
+            for ref in refs:
+                if ref.get("source_name") == "mitre-attack":
+                    tid = ref.get("external_id", "").upper()
+                    break
+
         name = technique.get("name", "")
         tactic = technique.get("tactic", "").lower()
-        if tid:
-            MITRE_LOOKUP[tid] = {"name": name, "tactic": tactic}
 
+        if tid:
+            MITRE_LOOKUP[tid] = {
+                "name": name,
+                "tactic": tactic
+            }
+
+# Load the MITRE data at import time
 load_mitre_data()
 
-
+# 🔐 TACTIC-BASED INVESTIGATION PLAYBOOK
 TACTIC_INVESTIGATION_MAP = {
     "reconnaissance": {
         "what": [
@@ -192,7 +207,7 @@ TACTIC_INVESTIGATION_MAP = {
     }
 }
 
-
+# Main function: lookup a MITRE technique ID and return triage guidance
 def get_investigation_tips(ttid: str):
     ttid = ttid.upper()
     parent_id = resolve_parent_ttid(ttid)

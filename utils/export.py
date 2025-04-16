@@ -46,12 +46,12 @@ def generate_highlight_comment(key, value):
     return None
 
 def generate_field_blocks(alert):
-    blocks = ""
     flat = flatten_json(alert)
+    blocks = ""
     for key, value in flat.items():
         explanation = get_field_explanation(key)
-        highlight = generate_highlight_comment(key, value)
-        comment_html = f"<br/><em style='color:red'>{highlight}</em>" if highlight else ""
+        comment = generate_highlight_comment(key, value)
+        comment_html = f"<br/><em style='color:red'>{comment}</em>" if comment else ""
         blocks += f"""
         <p><strong title="{explanation}">{key}:</strong> {value}
         <details><summary>What does this mean?</summary>
@@ -104,73 +104,67 @@ def export_alerts(alerts, output_path):
         if lvl >= 10: high += 1
         elif lvl >= 6: medium += 1
         else: low += 1
-        if any(x in mitre_id for x in ["t1059", "t1105", "t1547"]): mitre_hits += 1
+        if mitre_id.startswith("t1"): mitre_hits += 1
 
         rule = a.get("rule", {})
         desc = rule.get("description", "No description")
         alert_id = a.get("id", "Unknown")
-        lvl = int(rule.get("level", 0))
         severity_key, severity_tag = generate_severity_tag(lvl)
 
-        panel = f"""
-        <div class="panel alert" data-severity="{severity_key}">
+        panel = f"""<div class="panel alert" data-severity="{severity_key}">
             <h2>🚨 Alert ID: {alert_id}</h2>
             <h3>{desc} — {severity_tag}</h3>
             {generate_field_blocks(a)}
             <h3>🎯 Recommended Actions</h3>
-            <ul>
-                {''.join(f"<li>{r}</li>" for r in generate_custom_recommendations(a))}
-            </ul>
+            <ul>{''.join(f"<li>{r}</li>" for r in generate_custom_recommendations(a))}</ul>
         """
 
-        mitre_id_upper = str(a.get("rule", {}).get("mitre", {}).get("id", "")).upper()
+        mitre_id_upper = str(rule.get("mitre", {}).get("id", "")).upper()
         if mitre_id_upper:
             tips = get_investigation_tips(mitre_id_upper)
-            mitre_link = f"https://attack.mitre.org/techniques/{tips['title'].split(' – ')[0]}"
-            panel += f"""<h3>🧠 MITRE Technique: <a href="{mitre_link}" target="_blank">{tips['title']}</a></h3>"""
-
-            panel += "<details><summary>What to Investigate</summary><ul>"
-            for step in tips["what"]:
-                panel += f"<li>{step}</li>"
-            panel += "</ul></details>"
-
-            panel += "<details><summary>Where to Check</summary><ul>"
-            for src in tips["where"]:
-                panel += f"<li>{src}</li>"
-            panel += "</ul></details>"
+            technique_id = tips['title'].split(' – ')[0].strip()
+            mitre_link = f"https://attack.mitre.org/techniques/{technique_id}"
+            panel += f"""
+            <h3>🧠 MITRE Technique: <a href="{mitre_link}" target="_blank">{tips['title']}</a></h3>
+            <details><summary>What to Investigate</summary><ul>
+                {''.join(f"<li>{w}</li>" for w in tips['what'])}
+            </ul></details>
+            <details><summary>Where to Check</summary><ul>
+                {''.join(f"<li>{w}</li>" for w in tips['where'])}
+            </ul></details>
+            """
 
         panel += "</div>"
         panels.append(panel)
 
-    html = f"""
-    <html>
-    <head>
-        <title>SOCscribe Alert Report</title>
-        <style>
-            body {{ font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }}
-            .panel {{ background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; margin-bottom: 20px; }}
-            h2 {{ color: #003366; }}
-            h3 {{ color: #006699; }}
-            details {{ margin-top: 5px; font-size: 0.9em; }}
-            summary {{ cursor: pointer; color: #444; }}
-        </style>
-    </head>
-    <body>
-        <h1>SOCscribe Alerts Report</h1>
-        <div class="panel">
-            <h2>📊 Summary Dashboard</h2>
-            <p><strong>Total Alerts:</strong> {total}</p>
-            <p><strong>🔴 High Severity:</strong> {high}</p>
-            <p><strong>🟠 Medium Severity:</strong> {medium}</p>
-            <p><strong>🟢 Low Severity:</strong> {low}</p>
-            <p><strong>🧠 MITRE TTP Hits:</strong> {mitre_hits}</p>
-        </div>
-        <div id="alerts">
-            {''.join(panels)}
-        </div>
-    </body>
-    </html>
-    """
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>SOCscribe Report</title>
+    <style>
+        body {{ font-family: Arial; background: #f5f5f5; padding: 20px; }}
+        .panel {{ background: white; border-radius: 8px; box-shadow: 0 0 5px #ccc; padding: 20px; margin-bottom: 20px; }}
+        h2 {{ color: #003366; }}
+        h3 {{ color: #006699; }}
+        details {{ margin-top: 8px; }}
+        summary {{ cursor: pointer; }}
+        strong[title] {{ border-bottom: 1px dotted #999; cursor: help; }}
+    </style>
+</head>
+<body>
+    <h1>SOCscribe Alert Report</h1>
+    <div class="panel">
+        <h2>📊 Summary</h2>
+        <p><strong>Total Alerts:</strong> {total}</p>
+        <p><strong>🔴 High:</strong> {high}</p>
+        <p><strong>🟠 Medium:</strong> {medium}</p>
+        <p><strong>🟢 Low:</strong> {low}</p>
+        <p><strong>🧠 MITRE-related:</strong> {mitre_hits}</p>
+    </div>
+    {''.join(panels)}
+</body>
+</html>
+"""
 
     with open(output_path, "w") as f:
         f.write(html)
