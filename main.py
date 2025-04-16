@@ -2,10 +2,9 @@ import os
 import signal
 import time
 import json
+from datetime import datetime
 from rich.console import Console
 from utils.export import export_alerts
-
-
 
 console = Console()
 alerts = []
@@ -36,8 +35,13 @@ def tail_alerts():
                         continue
             time.sleep(2)
     except KeyboardInterrupt:
-        export_alerts(alerts)
-        console.print("\n[bold green]✅ Export complete. Exiting.[/bold green]")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_dir = os.path.join(os.getcwd(), "exports")
+        os.makedirs(export_dir, exist_ok=True)
+        output_path = os.path.join(export_dir, f"report_{timestamp}.html")
+
+        export_alerts(alerts, output_path)
+        console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
         exit()
 
 # ───────────────────────────────────────────────────────────────
@@ -52,7 +56,14 @@ def load_file_and_export():
                 alerts.append(alert)
             except json.JSONDecodeError:
                 continue
-    export_alerts(alerts)
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    export_dir = os.path.join(os.getcwd(), "exports")
+    os.makedirs(export_dir, exist_ok=True)
+    output_path = os.path.join(export_dir, f"report_{timestamp}.html")
+
+    export_alerts(alerts, output_path)
+    console.print(f"\n[bold green]✅ Export complete! Saved to:[/bold green] [cyan]{output_path}[/cyan]")
 
 # ───────────────────────────────────────────────────────────────
 # Entry point
