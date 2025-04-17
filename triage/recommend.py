@@ -5,7 +5,7 @@ from utils.mitre_index import get_investigation_tips
 console = Console()
 PLAYBOOK_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "playbooks.json")
 
-# Fallback play‑books per MITRE tactic  ✱  Keep these short & editable
+# -------------------------------------------------- defaults / libraries
 TACTIC_LIBRARY = {
     "execution": {
         "goal": "A process or script was launched on the host.",
@@ -32,69 +32,63 @@ TACTIC_LIBRARY = {
             "Compare with baseline autoruns; remove unknown entries.",
             "Hunt for matching artefacts on sibling hosts."
         ]
-    },
-    # …add more tactics as you grow…
+    }
 }
 
-# How urgent / who owns it
 PRIORITY = {
     "High":   ("🚨  **High‑priority** – escalate to IR Lead *immediately*", "Incident‑Response Lead"),
     "Medium": ("⚠️  **Medium‑priority** – Tier 2 review within 60 min",      "Tier 2 SOC Analyst"),
     "Low":    ("ℹ️  **Low‑priority** – Tier 1 review in normal queue",       "Tier 1 SOC Analyst")
 }
 
-def _emit(line, return_text, bucket):
-    if return_text:
+# -------------------------------------------------- helpers
+def _emit(line, as_text, bucket):
+    if as_text:
         bucket.append(textwrap.fill(line, width=100))
     else:
         console.print(line)
 
-def recommend_response(alert, return_text: bool=False):
-    """
-    Build a rich, multi‑step response plan for the supplied alert
-    (prints with colours via Rich **or** returns newline‑joined text for HTML export).
-    """
-    out = []
-    rule      = alert.get("rule", {})
-    rule_id   = str(rule.get("id", ""))
-    mitre_ids = rule.get("mitre", {}).get("id", []) or []
+# -------------------------------------------------- main entry
+def recommend_response(alert, return_text: bool = False):
+    out_lines = []
+
+    rule       = alert.get("rule", {})
+    rule_id    = str(rule.get("id", ""))
+    mitre_ids  = rule.get("mitre", {}).get("id", []) or []
     if isinstance(mitre_ids, str):
         mitre_ids = [mitre_ids]
-    tactic    = (rule.get("mitre", {}).get("tactic") or [""]).lower()
-    tactic    = tactic[0] if isinstance(tactic, list) else tactic
-    sev       = alert.get("_severity_label", "Low")
 
-    # ------------------------------------------------– Load playbooks
+    # ---- tactic may be list **or** string → normalise then lower‑case
+    raw_tactic = rule.get("mitre", {}).get("tactic", "")
+    if isinstance(raw_tactic, list):
+        raw_tactic = raw_tactic[0] if raw_tactic else ""
+    tactic = raw_tactic.lower()
+
+    severity   = alert.get("_severity_label", "Low")
+
+    # ---------- load external playbooks (if present)
     try:
         with open(PLAYBOOK_PATH, "r") as fp:
             playbooks = json.load(fp)
     except Exception as e:
         playbooks = {}
-        _emit(f"[red]✖  Could not load playbooks.json ➜ {e}[/]", return_text, out)
+        _emit(f"[red]✖  Could not load playbooks.json ➜ {e}[/]", return_text, out_lines)
 
-    # ------------------------------------------------– Build actions list
+    # ---------- choose actions
     actions = None
-
-    # 1️⃣ exact rule ID
     if rule_id and rule_id in playbooks:
         actions = playbooks[rule_id]["actions"]
 
-    # 2️⃣ any MITRE technique ID
     if not actions:
         for tid in mitre_ids:
             if tid in playbooks:
                 actions = playbooks[tid]["actions"]
                 break
 
-    # 3️⃣ tactic library
     if not actions and tactic in TACTIC_LIBRARY:
         lib = TACTIC_LIBRARY[tactic]
-        actions = [
-            f"**Objective →** {lib['goal']}",
-            *lib["play"]
-        ]
+        actions = [f"**Objective →** {lib['goal']}", *lib["play"]]
 
-    # 4️⃣ generic fallback
     if not actions:
         actions = [
             "⚙️  **Generic Response Template**",
@@ -104,24 +98,21 @@ def recommend_response(alert, return_text: bool=False):
             "4. Document findings and escalate to Team Lead if needed."
         ]
 
-    # ------------------------------------------------– Render
-    prio_line, owner = PRIORITY.get(sev, ("ℹ️  Review when possible", "Tier 1 SOC Analyst"))
-    _emit(prio_line, return_text, out)
-    _emit(f"**Ownership:** {owner}", return_text, out)
-    _emit("", return_text, out)
+    # ---------- render to console / text
+    prio_line, owner = PRIORITY.get(severity, ("ℹ️  Review when possible", "Tier 1 SOC Analyst"))
+    _emit(prio_line, return_text, out_lines)
+    _emit(f"**Ownership:** {owner}", return_text, out_lines)
+    _emit("", return_text, out_lines)
 
     for step in actions:
-        if isinstance(step, str) and step.startswith("**Objective"):
-            _emit(step, return_text, out)
-        else:
-            _emit(f"- {step}", return_text, out)
+        _emit(step if step.startswith("**Objective") else f"- {step}", return_text, out_lines)
 
-    # quick links (investigation tips) at the bottom
+    # quick investigation links
     for tid in mitre_ids:
         tips = get_investigation_tips(tid)
         link = f"https://attack.mitre.org/techniques/{tid}"
-        _emit(f"\n🔗 *Investigation cheat‑sheet for* [{tid}]({link}):", return_text, out)
+        _emit(f"\n🔗 *Investigation cheat‑sheet for* [{tid}]({link}):", return_text, out_lines)
         for w in tips["what"]:
-            _emit(f"   • {w}", return_text, out)
+            _emit(f"   • {w}", return_text, out_lines)
 
-    return "\n".join(out) if return_text else None
+    return "\n".join(out_lines) if return_text else None
