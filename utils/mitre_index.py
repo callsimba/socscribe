@@ -213,14 +213,15 @@ def get_investigation_tips(ttid: str):
         ttid = ttid[0]
     ttid = ttid.upper()
 
-    if ttid in custom_tactics:
+    parent_id = resolve_parent_ttid(ttid)
+
+    if parent_id in custom_tactics:
         return {
-            "title": custom_tactics[ttid]["title"],
-            "what": custom_tactics[ttid]["what"],
-            "where": custom_tactics[ttid]["where"]
+            "title": custom_tactics[parent_id]["title"],
+            "what": custom_tactics[parent_id]["what"],
+            "where": custom_tactics[parent_id]["where"]
         }
 
-    parent_id = resolve_parent_ttid(ttid)
     mitre_entry = MITRE_LOOKUP.get(parent_id)
 
     if not mitre_entry:
@@ -239,4 +240,3 @@ def get_investigation_tips(ttid: str):
         "what": fallback.get("what", ["No actionable items."]),
         "where": fallback.get("where", ["No sources defined."])
     }
-

@@ -100,20 +100,27 @@ def export_alerts(alerts, output_path):
         flat = flatten_dict(alert)
         content_text = json.dumps(flat).lower()
 
-        html += f"<div class='alert severity-{severity}' data-severity='{severity}' data-mitre='{mitre_id}' data-time='{timestamp}' data-content='{content_text}'>"
+        # Prepare MITRE ID list
+        ids = mitre_id if isinstance(mitre_id, list) else [mitre_id]
+        links = " ".join([f"<a href='https://attack.mitre.org/techniques/{mid}' target='_blank'>[{mid}]</a>" for mid in ids])
+
+        html += f"<div class='alert severity-{severity}' data-severity='{severity}' data-mitre='{','.join(ids)}' data-time='{timestamp}' data-content='{content_text}'>"
         html += f"<h3>{desc}</h3>"
         html += f"<p><strong>🧠 What happened?</strong> {desc}</p>"
         html += f"<p><strong>🔍 Why it's important:</strong> {reason}</p>"
-        html += f"<p class='meta'>🕒 {timestamp} | 🧠 MITRE: {tactic} – {technique} (<a href='https://attack.mitre.org/techniques/{mitre_id}'>[{mitre_id}]</a>)</p>"
+        html += f"<p class='meta'>🕒 {timestamp} | 🧠 MITRE: {tactic} – {technique} {links}</p>"
         html += f"<p class='meta'>🚨 Severity: <strong>{severity}</strong></p>"
 
-        tips = get_investigation_tips(mitre_id)
-        html += "<details><summary>🧪 Investigation Guidance</summary><ul>"
-        for item in tips["what"]:
-            html += f"<li>{item}</li>"
-        for item in tips["where"]:
-            html += f"<li><em>{item}</em></li>"
-        html += "</ul></details>"
+        html += "<details><summary>🧪 Investigation Guidance</summary>"
+        for mid in ids:
+            tips = get_investigation_tips(mid)
+            html += f"<h4>{tips['title']}</h4><ul>"
+            for item in tips["what"]:
+                html += f"<li>{item}</li>"
+            for item in tips["where"]:
+                html += f"<li><em>{item}</em></li>"
+            html += "</ul>"
+        html += "</details>"
 
         html += "<details><summary>🔍 Full Alert Details</summary>"
         for key, value in flat.items():
