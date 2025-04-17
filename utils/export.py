@@ -127,7 +127,7 @@ def export_alerts(alerts, output_path):
         html += "<details><summary>🔍 Full Alert Details</summary>"
         for key, value in flat.items():
             explanation = get_field_explanation(key)
-            html += f"<div class='field'><span class='key'>{key}:</span><span class='value'>{value}</span><br><em>{explanation}</em></div>"
+            html += f"<div class='field'><span class='key'>{key}: </span>{value}<br><em>{explanation}</em></div><br>"
         html += "</details>"
 
         html += "<details><summary>🎯 Recommended Actions</summary><ul>"
