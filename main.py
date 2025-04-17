@@ -1,7 +1,54 @@
+from utils.mitre_index import get_investigation_tips
 from utils.flatten import flatten_dict
+
+
+MITRE_SEVERITY_MAP = {
+    "Reconnaissance": "Low",
+    "Resource Development": "Low",
+    "Initial Access": "High",
+    "Execution": "High",
+    "Persistence": "High",
+    "Privilege Escalation": "High",
+    "Defense Evasion": "High",
+    "Credential Access": "High",
+    "Discovery": "Medium",
+    "Lateral Movement": "High",
+    "Collection": "Medium",
+    "Command and Control": "High",
+    "Exfiltration": "High",
+    "Impact": "High"
+}
+
 def calculate_severity(alert):
     rule = alert.get("rule", {})
-    flat = flatten_dict(alert)
+    tactic = rule.get("mitre", {}).get("tactic", "")
+    if isinstance(tactic, list):
+        tactic = tactic[0] if tactic else ""
+    tactic = tactic.title()
+    
+    # Keyword-based escalation
+    flat = flatten_dict(alert) if 'flatten_dict' in globals() else alert
+    cmd = flat.get("data.win.eventdata.commandLine", "").lower()
+    desc = rule.get("description", "").lower()
+    if isinstance(tactic, list):
+        tactic = tactic[0] if tactic else ""
+    severity = MITRE_SEVERITY_MAP.get(tactic.title(), "Low")
+    level_map = {"Low": 3, "Medium": 6, "High": 10}
+    return level_map.get(severity, 3)
+
+
+def calculate_severity(alert):
+    rule = alert.get("rule", {})
+    tactic = rule.get("mitre", {}).get("tactic", "")
+    if isinstance(tactic, list):
+        tactic = tactic[0] if tactic else ""
+    tactic = tactic.title()
+    
+    # Keyword-based escalation
+    flat = flatten_dict(alert) if 'flatten_dict' in globals() else alert
+    cmd = flat.get("data.win.eventdata.commandLine", "").lower()
+    desc = rule.get("description", "").lower()
+    flat = flatten_dict(alert) if 'flatten_dict' in globals() else alert
     desc = rule.get("description", "").lower()
     mitre_id = str(rule.get("mitre", {}).get("id", "")).lower()
     fired = int(rule.get("firedtimes", 0))

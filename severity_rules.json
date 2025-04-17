@@ -1,0 +1,14 @@
+{
+  "mitre": {
+    "T1059": "High",
+    "T1566": "High"
+  },
+  "keywords": {
+    "base64": "High",
+    "encodedcommand": "High",
+    "lsass": "High",
+    "powershell": "High",
+    "obfuscation": "High",
+    "reverse shell": "High"
+  }
+}
