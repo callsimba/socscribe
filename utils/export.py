@@ -1,3 +1,13 @@
+
+def generate_html_content(alerts):
+    # Placeholder: generate full HTML content from alerts
+    html = "<html><head><title>SOCscribe Report</title></head><body>"
+    for alert in alerts:
+        html += f"<div class='panel alert'><h3>{alert.get('rule', {}).get('description', 'No Description')}</h3></div>"
+    html += "</body></html>"
+    return html
+
+
 import json
 from utils.flatten import flatten_dict
 from utils.mitre_index import get_investigation_tips, MITRE_SEVERITY_MAP
@@ -72,3 +82,8 @@ function filterByKeyword() {
 }
 </script>
 """
+def export_alerts(alerts, output_path):
+    html = generate_html_content(alerts)
+    html += html_script
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(html)
