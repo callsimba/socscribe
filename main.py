@@ -4,6 +4,7 @@ import sys
 import time
 import json
 import signal
+import select
 import threading
 import termios, tty
 from datetime import datetime
@@ -49,32 +50,34 @@ def sigint_handler(signum, frame):
     global ctrl_c_count
     ctrl_c_count += 1
     if ctrl_c_count == 1:
-        console.print("\n[bold yellow]↩ Returning to main menu… (press Ctrl+C again to quit)[/bold yellow]")
         raise KeyboardInterrupt
     else:
-        console.print("\n[bold red]👋 SOCscribe closed. Stay safe![/bold red]")
+        console.print("\n[bold red]👋 SOCscribe closed.[/bold red]")
         sys.exit(0)
 signal.signal(signal.SIGINT, sigint_handler)
 
-def key_listener():
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    tty.setcbreak(fd)
-    try:
-        while True:
-            ch = sys.stdin.read(1)
-            key_queue.put(ch)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-threading.Thread(target=key_listener, daemon=True).start()
+def start_key_listener():
+    stop = threading.Event()
+    def listen():
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+        try:
+            while not stop.is_set():
+                if sys.stdin in select.select([sys.stdin], [], [], 0.05)[0]:
+                    key_queue.put(sys.stdin.read(1))
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    t = threading.Thread(target=listen, daemon=True)
+    t.start()
+    return t, stop
 
 def tail_alerts():
     global ctrl_c_count
     ctrl_c_count = 0
-    seen               = set()
-    idle_prompt_shown  = False
-    last_activity      = time.time()
-    idle_seconds       = 10
+    listener, stop_flag = start_key_listener()
+    seen, idle_prompt_shown = set(), False
+    last_activity, idle_seconds = time.time(), 10
     console.print(f"📡 Listening for new alerts in: [bold yellow]{ALERT_LOG_PATH}[/bold yellow]")
     try:
         while True:
@@ -115,11 +118,14 @@ def tail_alerts():
             except Empty:
                 pass
             if not idle_prompt_shown and time.time() - last_activity > idle_seconds:
-                console.print("[dim]⏳ Press Ctrl+Q at any time to export a snapshot report.[/dim]")
+                console.print("[dim]⏳ Press Ctrl+Q to export a snapshot report.[/dim]")
                 idle_prompt_shown = True
             time.sleep(1)
     except KeyboardInterrupt:
-        return
+        pass
+    finally:
+        stop_flag.set()
+        listener.join(timeout=0.2)
 
 def export_current():
     timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -129,29 +135,17 @@ def export_current():
     export_alerts(alerts, output_path)
     console.print(f"[bold green]✅ Report saved to:[/bold green] [cyan]{output_path}[/cyan]")
 
-def load_file_and_export():
-    with open(ALERT_LOG_PATH, "r") as f:
-        for line in f:
-            try:
-                alert = json.loads(line)
-                alerts.append(enrich_alert(alert, calculate_severity))
-            except json.JSONDecodeError:
-                continue
-    export_current()
-
 def main():
     while True:
         console.print("""
 [bold magenta]──────────────────────────────── SOCscribe ────────────────────────────────[/bold magenta]
-[1] Watch live alerts
-[2] Export entire alert log to HTML
-[Ctrl+C]  Exit
+- PRESS 1  to Watch live alerts
+- Press Ctrl+Q anytime to export report
+- Press Ctrl+C to return here or exit
 """)
-        choice = input("Choose option [1/2] (1): ").strip() or "1"
+        choice = input("Press 1 To Start: ").strip() or "1"
         if choice == "1":
             tail_alerts()
-        elif choice == "2":
-            load_file_and_export()
         else:
             console.print("[red]Invalid option.[/red]")
 
