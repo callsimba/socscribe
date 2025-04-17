@@ -60,16 +60,19 @@ ALERT_LOG_PATH = os.path.expanduser("~/wazuh-logs/alerts.json")
 def enrich_alert(alert):
     level = calculate_severity(alert)
     alert["_severity_score"] = level
-    if level >= 10:
+
+    if level >= 8:
         alert["_severity_label"] = "High"
-        alert["_severity_reason"] = "Matched critical MITRE ID, tools, or behavior"
-    elif level >= 6:
+        alert["_severity_reason"] = "Matched critical MITRE ID, encoded payload, or execution chain"
+    elif level >= 4:
         alert["_severity_label"] = "Medium"
         alert["_severity_reason"] = "Matched suspicious command, parent, or multiple firings"
     else:
         alert["_severity_label"] = "Low"
         alert["_severity_reason"] = "No high-risk indicator matched"
+
     return alert
+
 
 def tail_alerts():
     seen = set()

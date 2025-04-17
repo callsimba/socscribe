@@ -1,7 +1,8 @@
 import os
 import json
+from utils.custom_tactics import custom_tactics
 
-# Global dictionary to store MITRE technique ID → title and tactic
+
 MITRE_LOOKUP = {}
 
 def resolve_parent_ttid(ttid: str) -> str:
@@ -15,7 +16,7 @@ def load_mitre_data():
     for technique in data.get("techniques", []):
         tid = technique.get("external_id", "").upper()
 
-        # Fallback: Extract from external_references if external_id missing
+        
         if not tid:
             refs = technique.get("external_references", [])
             for ref in refs:
@@ -32,10 +33,10 @@ def load_mitre_data():
                 "tactic": tactic
             }
 
-# Load the MITRE data at import time
+
 load_mitre_data()
 
-# 🔐 TACTIC-BASED INVESTIGATION PLAYBOOK
+
 TACTIC_INVESTIGATION_MAP = {
     "reconnaissance": {
         "what": [
@@ -212,6 +213,13 @@ def get_investigation_tips(ttid: str):
         ttid = ttid[0]
     ttid = ttid.upper()
 
+    if ttid in custom_tactics:
+        return {
+            "title": custom_tactics[ttid]["title"],
+            "what": custom_tactics[ttid]["what"],
+            "where": custom_tactics[ttid]["where"]
+        }
+
     parent_id = resolve_parent_ttid(ttid)
     mitre_entry = MITRE_LOOKUP.get(parent_id)
 
@@ -231,3 +239,4 @@ def get_investigation_tips(ttid: str):
         "what": fallback.get("what", ["No actionable items."]),
         "where": fallback.get("where", ["No sources defined."])
     }
+
