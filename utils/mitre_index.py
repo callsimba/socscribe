@@ -207,9 +207,11 @@ TACTIC_INVESTIGATION_MAP = {
     }
 }
 
-# Main function: lookup a MITRE technique ID and return triage guidance
 def get_investigation_tips(ttid: str):
+    if isinstance(ttid, list):
+        ttid = ttid[0]
     ttid = ttid.upper()
+
     parent_id = resolve_parent_ttid(ttid)
     mitre_entry = MITRE_LOOKUP.get(parent_id)
 
@@ -229,19 +231,3 @@ def get_investigation_tips(ttid: str):
         "what": fallback.get("what", ["No actionable items."]),
         "where": fallback.get("where", ["No sources defined."])
     }
-MITRE_SEVERITY_MAP = {
-    "Reconnaissance": "Low",
-    "Resource Development": "Low",
-    "Initial Access": "High",
-    "Execution": "High",
-    "Persistence": "High",
-    "Privilege Escalation": "High",
-    "Defense Evasion": "High",
-    "Credential Access": "High",
-    "Discovery": "Medium",
-    "Lateral Movement": "High",
-    "Collection": "Medium",
-    "Command and Control": "High",
-    "Exfiltration": "High",
-    "Impact": "High"
-}
