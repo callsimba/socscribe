@@ -6,23 +6,11 @@ from rich.console import Console
 from utils.export import export_alerts
 from utils.mitre_index import get_investigation_tips
 from utils.flatten import flatten_dict
+from utils.severity import enrich_alert  # 🔄 Moved here
 
-MITRE_SEVERITY_MAP = {
-    "Reconnaissance": "Low",
-    "Resource Development": "Low",
-    "Initial Access": "High",
-    "Execution": "High",
-    "Persistence": "High",
-    "Privilege Escalation": "High",
-    "Defense Evasion": "High",
-    "Credential Access": "High",
-    "Discovery": "Medium",
-    "Lateral Movement": "High",
-    "Collection": "Medium",
-    "Command and Control": "High",
-    "Exfiltration": "High",
-    "Impact": "High"
-}
+console = Console()
+alerts = []
+ALERT_LOG_PATH = os.path.expanduser("~/wazuh-logs/alerts.json")
 
 def calculate_severity(alert):
     rule = alert.get("rule", {})
@@ -53,27 +41,6 @@ def calculate_severity(alert):
         return 6
     return int(rule.get("level", 0))
 
-console = Console()
-alerts = []
-ALERT_LOG_PATH = os.path.expanduser("~/wazuh-logs/alerts.json")
-
-def enrich_alert(alert):
-    level = calculate_severity(alert)
-    alert["_severity_score"] = level
-
-    if level >= 8:
-        alert["_severity_label"] = "High"
-        alert["_severity_reason"] = "Matched critical MITRE ID, encoded payload, or execution chain"
-    elif level >= 4:
-        alert["_severity_label"] = "Medium"
-        alert["_severity_reason"] = "Matched suspicious command, parent, or multiple firings"
-    else:
-        alert["_severity_label"] = "Low"
-        alert["_severity_reason"] = "No high-risk indicator matched"
-
-    return alert
-
-
 def tail_alerts():
     seen = set()
     console.print(f"📡 Listening for new alerts in: [bold yellow]{ALERT_LOG_PATH}[/bold yellow]")
@@ -87,7 +54,7 @@ def tail_alerts():
                             alert_id = alert.get("id")
                             if alert_id and alert_id not in seen:
                                 seen.add(alert_id)
-                                alert = enrich_alert(alert)
+                                alert = enrich_alert(alert, calculate_severity)
                                 timestamp = alert.get("timestamp", "").replace("T", " @ ").split(".")[0]
                                 summary = alert.get("rule", {}).get("description", "[No Description]")
                                 tag = alert["_severity_label"]
@@ -118,7 +85,7 @@ def load_file_and_export():
         for line in f:
             try:
                 alert = json.loads(line)
-                alert = enrich_alert(alert)
+                alert = enrich_alert(alert, calculate_severity)
                 alerts.append(alert)
             except json.JSONDecodeError:
                 continue

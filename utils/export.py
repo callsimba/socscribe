@@ -5,6 +5,7 @@ from utils.flatten import flatten_dict
 from utils.mitre_index import get_investigation_tips
 from triage.field_explanations import get_field_explanation
 from triage.recommend import recommend_response
+from utils.severity import get_mitre_severity
 
 EXPORT_DIR = "exports"
 os.makedirs(EXPORT_DIR, exist_ok=True)
@@ -24,7 +25,7 @@ HTML_HEAD = """
     .severity-Low { border-left: 6px solid green; }
     .meta { font-size: 0.9em; color: #666; }
     .field { margin: 5px 0; }
-    .field span.key { font-weight: bold; }
+    .field span.key { font-weight: bold; margin-right: 5px; display: inline-block; min-width: 240px; }
     .reason { font-style: italic; font-size: 0.85em; color: #444; margin-top: 5px; }
     details { margin-top: 10px; }
     summary { cursor: pointer; font-weight: bold; }
@@ -100,7 +101,6 @@ def export_alerts(alerts, output_path):
         flat = flatten_dict(alert)
         content_text = json.dumps(flat).lower()
 
-        # Prepare MITRE ID list
         ids = mitre_id if isinstance(mitre_id, list) else [mitre_id]
         links = " ".join([f"<a href='https://attack.mitre.org/techniques/{mid}' target='_blank'>[{mid}]</a>" for mid in ids])
 
@@ -114,7 +114,9 @@ def export_alerts(alerts, output_path):
         html += "<details><summary>🧪 Investigation Guidance</summary>"
         for mid in ids:
             tips = get_investigation_tips(mid)
-            html += f"<h4>{tips['title']}</h4><ul>"
+            mitre_sev = get_mitre_severity(mid)
+            color = "red" if mitre_sev == "High" else "orange" if mitre_sev == "Medium" else "green" if mitre_sev == "Low" else "gray"
+            html += f"<h4><span style='color:{color}'>[{mitre_sev}]</span> {tips['title']}</h4><ul>"
             for item in tips["what"]:
                 html += f"<li>{item}</li>"
             for item in tips["where"]:
@@ -125,7 +127,7 @@ def export_alerts(alerts, output_path):
         html += "<details><summary>🔍 Full Alert Details</summary>"
         for key, value in flat.items():
             explanation = get_field_explanation(key)
-            html += f"<div class='field'><span class='key'>{key}:</span> {value}<br><em>{explanation}</em></div>"
+            html += f"<div class='field'><span class='key'>{key}:</span><span class='value'>{value}</span><br><em>{explanation}</em></div>"
         html += "</details>"
 
         html += "<details><summary>🎯 Recommended Actions</summary><ul>"
