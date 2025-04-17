@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-import os
-import sys
-import time
-import json
-import signal
-import select
-import threading
-import termios, tty
+import os, sys, time, json, signal, select, threading, termios, tty
 from datetime import datetime
 from queue import Queue, Empty
 from rich.console import Console
@@ -51,16 +44,15 @@ def sigint_handler(signum, frame):
     ctrl_c_count += 1
     if ctrl_c_count == 1:
         raise KeyboardInterrupt
-    else:
-        console.print("\n[bold red]👋 SOCscribe closed.[/bold red]")
-        sys.exit(0)
+    console.print("\n[bold red]👋 SOCscribe closed.[/bold red]")
+    sys.exit(0)
 signal.signal(signal.SIGINT, sigint_handler)
 
 def start_key_listener():
     stop = threading.Event()
     def listen():
-        fd = sys.stdin.fileno()
-        old = termios.tcgetattr(fd)
+        fd   = sys.stdin.fileno()
+        old  = termios.tcgetattr(fd)
         tty.setcbreak(fd)
         try:
             while not stop.is_set():
@@ -75,9 +67,10 @@ def start_key_listener():
 def tail_alerts():
     global ctrl_c_count
     ctrl_c_count = 0
-    listener, stop_flag = start_key_listener()
-    seen, idle_prompt_shown = set(), False
-    last_activity, idle_seconds = time.time(), 10
+    listener, stop_flag       = start_key_listener()
+    seen, idle_prompt_shown   = set(), False
+    last_activity, idle_secs  = time.time(), 10
+
     console.print(f"📡 Listening for new alerts in: [bold yellow]{ALERT_LOG_PATH}[/bold yellow]")
     try:
         while True:
@@ -101,23 +94,23 @@ def tail_alerts():
                         except json.JSONDecodeError:
                             continue
             except FileNotFoundError:
-                console.print(f"[red]❌ File not found: {ALERT_LOG_PATH}[/red]")
+                console.print("[red]❌ File not found:[/] {ALERT_LOG_PATH}")
                 break
             except PermissionError:
-                console.print(f"[red]❌ Permission denied: {ALERT_LOG_PATH}[/red]")
+                console.print("[red]❌ Permission denied:[/] {ALERT_LOG_PATH}")
                 break
+
             if new_data:
-                last_activity      = time.time()
-                idle_prompt_shown  = False
+                last_activity, idle_prompt_shown = time.time(), False
+
             try:
-                ch = key_queue.get_nowait()
-                if ch == CTRL_Q:
+                if key_queue.get_nowait() == CTRL_Q:
                     export_current()
-                    last_activity     = time.time()
-                    idle_prompt_shown = False
+                    last_activity, idle_prompt_shown = time.time(), False
             except Empty:
                 pass
-            if not idle_prompt_shown and time.time() - last_activity > idle_seconds:
+
+            if not idle_prompt_shown and time.time() - last_activity > idle_secs:
                 console.print("[dim]⏳ Press Ctrl+Q to export a snapshot report.[/dim]")
                 idle_prompt_shown = True
             time.sleep(1)
@@ -128,21 +121,36 @@ def tail_alerts():
         listener.join(timeout=0.2)
 
 def export_current():
-    timestamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ts          = datetime.now().strftime("%Y%m%d_%H%M%S")
     export_dir  = os.path.join(os.getcwd(), "exports")
     os.makedirs(export_dir, exist_ok=True)
-    output_path = os.path.join(export_dir, f"report_{timestamp}.html")
+    output_path = os.path.join(export_dir, f"report_{ts}.html")
     export_alerts(alerts, output_path)
     console.print(f"[bold green]✅ Report saved to:[/bold green] [cyan]{output_path}[/cyan]")
 
+BANNER = r"""
+ ____   ___   ____               _ _          
+/ ___| / _ \ / ___|___  ___ _ __(_) |__   ___ 
+\___ \| | | | |   / __|/ __| '__| | '_ \ / _ \
+ ___) | |_| | |___\__ \ (__| |  | | |_) |  __/
+|____/ \___/ \____|___/\___|_|  |_|_.__/ \___|
+                                              
+"""
+
+TAGLINE = (
+    "[bold cyan]SOCscribe[/bold cyan] – real‑time Wazuh alert watcher & one‑click HTML reporting\n"
+    "Developed by [bold]Michael Ebere[/bold] (CallSimba)"
+)
+
 def main():
     while True:
-        console.print("""
-[bold magenta]──────────────────────────────── SOCscribe ────────────────────────────────[/bold magenta]
-- PRESS 1  to Watch live alerts
-- Press Ctrl+Q anytime to export report
-- Press Ctrl+C to return here or exit
-""")
+        console.print(f"\n{BANNER}{TAGLINE}\n")
+        console.print(
+            "[bold magenta]───────────────────────────────────────────────[/bold magenta]\n"
+            "- PRESS [bold]1[/bold]  to Watch live alerts\n"
+            "- Press [bold]Ctrl+Q[/bold] at any time to export a report\n"
+            "- Press [bold]Ctrl+C[/bold] once to return here; twice to exit\n"
+        )
         choice = input("Press 1 To Start: ").strip() or "1"
         if choice == "1":
             tail_alerts()
