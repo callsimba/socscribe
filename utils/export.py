@@ -29,13 +29,58 @@ HTML_HEAD = """
     details { margin-top: 10px; }
     summary { cursor: pointer; font-weight: bold; }
     ul { margin-top: 5px; }
+    .filters { margin-bottom: 20px; }
+    .filters label { margin-right: 10px; }
+    input, select { padding: 4px; margin-right: 10px; }
   </style>
 </head>
 <body>
 <h1>SOCscribe - Alert Report</h1>
+
+<div class="filters">
+  <label>Severity:</label>
+  <select id="severityFilter" onchange="applyFilters()">
+    <option value="">All</option>
+    <option value="High">High</option>
+    <option value="Medium">Medium</option>
+    <option value="Low">Low</option>
+  </select>
+
+  <label>MITRE ID:</label>
+  <input type="text" id="mitreFilter" placeholder="e.g., T1059" onkeyup="applyFilters()"/>
+
+  <label>Date:</label>
+  <input type="date" id="dateFilter" onchange="applyFilters()"/>
+
+  <label>Keyword:</label>
+  <input type="text" id="keywordFilter" placeholder="e.g., powershell" onkeyup="applyFilters()" />
+</div>
 """
 
 HTML_FOOT = """
+<script>
+function applyFilters() {
+  const severity = document.getElementById("severityFilter").value;
+  const mitre = document.getElementById("mitreFilter").value.toLowerCase();
+  const date = document.getElementById("dateFilter").value;
+  const keyword = document.getElementById("keywordFilter").value.toLowerCase();
+
+  const alerts = document.querySelectorAll(".alert");
+  alerts.forEach(alert => {
+    const sev = alert.getAttribute("data-severity");
+    const mitreText = alert.getAttribute("data-mitre");
+    const time = alert.getAttribute("data-time");
+    const content = alert.getAttribute("data-content");
+
+    const matchSev = !severity || sev === severity;
+    const matchMitre = !mitre || mitreText.toLowerCase().includes(mitre);
+    const matchDate = !date || (time && time.startsWith(date));
+    const matchKeyword = !keyword || content.includes(keyword);
+
+    alert.style.display = (matchSev && matchMitre && matchDate && matchKeyword) ? "block" : "none";
+  });
+}
+</script>
 </body>
 </html>
 """
@@ -52,18 +97,16 @@ def export_alerts(alerts, output_path):
         mitre_id = rule.get("mitre", {}).get("id", "-")
         tactic = rule.get("mitre", {}).get("tactic", "Unknown")
         technique = rule.get("mitre", {}).get("technique", "Unknown")
-
-        # Flatten all fields
         flat = flatten_dict(alert)
+        content_text = json.dumps(flat).lower()
 
-        html += f"<div class='alert severity-{severity}'>"
+        html += f"<div class='alert severity-{severity}' data-severity='{severity}' data-mitre='{mitre_id}' data-time='{timestamp}' data-content='{content_text}'>"
         html += f"<h3>{desc}</h3>"
+        html += f"<p><strong>🧠 What happened?</strong> {desc}</p>"
+        html += f"<p><strong>🔍 Why it's important:</strong> {reason}</p>"
         html += f"<p class='meta'>🕒 {timestamp} | 🧠 MITRE: {tactic} – {technique} (<a href='https://attack.mitre.org/techniques/{mitre_id}'>[{mitre_id}]</a>)</p>"
         html += f"<p class='meta'>🚨 Severity: <strong>{severity}</strong></p>"
-        if reason:
-            html += f"<p class='reason'>Reason: {reason}</p>"
 
-        # Investigation steps
         tips = get_investigation_tips(mitre_id)
         html += "<details><summary>🧪 Investigation Guidance</summary><ul>"
         for item in tips["what"]:
@@ -72,14 +115,12 @@ def export_alerts(alerts, output_path):
             html += f"<li><em>{item}</em></li>"
         html += "</ul></details>"
 
-        # All fields
         html += "<details><summary>🔍 Full Alert Details</summary>"
         for key, value in flat.items():
             explanation = get_field_explanation(key)
             html += f"<div class='field'><span class='key'>{key}:</span> {value}<br><em>{explanation}</em></div>"
         html += "</details>"
 
-        # Recommendations
         html += "<details><summary>🎯 Recommended Actions</summary><ul>"
         for line in recommend_response(alert, return_text=True).splitlines():
             html += f"<li>{line}</li>"
@@ -88,5 +129,6 @@ def export_alerts(alerts, output_path):
         html += "</div>"
 
     html += HTML_FOOT
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(html)
