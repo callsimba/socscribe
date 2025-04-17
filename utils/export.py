@@ -25,7 +25,7 @@ HTML_HEAD = """
     .severity-Low { border-left: 6px solid green; }
     .meta { font-size: 0.9em; color: #666; }
     .field { margin: 5px 0; }
-    .field span.key { font-weight: bold; margin-right: 5px; display: inline-block; min-width: 240px; }
+    .field span.key { font-weight: bold; }
     .reason { font-style: italic; font-size: 0.85em; color: #444; margin-top: 5px; }
     details { margin-top: 10px; }
     summary { cursor: pointer; font-weight: bold; }
@@ -134,7 +134,7 @@ def export_alerts(alerts, output_path):
         html += "<details><summary>🔍 Full Alert Details</summary>"
         for key, value in flat.items():
             explanation = get_field_explanation(key)
-            html += f"<div class='field'><span class='key'>{key}: </span>{value}<br><em>{explanation}</em></div><br>"
+            html += f"<div class='field'><span class='key'>{key}:</span>&nbsp;&nbsp;{value}<br><em>{explanation}</em></div><br>"
         html += "</details>"
 
         html += "<details><summary>🎯 Recommended Actions</summary><ul>"
