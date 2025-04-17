@@ -229,3 +229,19 @@ def get_investigation_tips(ttid: str):
         "what": fallback.get("what", ["No actionable items."]),
         "where": fallback.get("where", ["No sources defined."])
     }
+MITRE_SEVERITY_MAP = {
+    "Reconnaissance": "Low",
+    "Resource Development": "Low",
+    "Initial Access": "High",
+    "Execution": "High",
+    "Persistence": "High",
+    "Privilege Escalation": "High",
+    "Defense Evasion": "High",
+    "Credential Access": "High",
+    "Discovery": "Medium",
+    "Lateral Movement": "High",
+    "Collection": "Medium",
+    "Command and Control": "High",
+    "Exfiltration": "High",
+    "Impact": "High"
+}
