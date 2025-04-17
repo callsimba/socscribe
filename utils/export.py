@@ -86,6 +86,13 @@ function applyFilters() {
 </html>
 """
 
+def build_mitre_link(mid):
+    if "." in mid:
+        parent, sub = mid.split(".")
+        sub = sub.zfill(3)
+        return f"https://attack.mitre.org/techniques/{parent}/{sub}"
+    return f"https://attack.mitre.org/techniques/{mid}"
+
 def export_alerts(alerts, output_path):
     html = HTML_HEAD
 
@@ -102,7 +109,7 @@ def export_alerts(alerts, output_path):
         content_text = json.dumps(flat).lower()
 
         ids = mitre_id if isinstance(mitre_id, list) else [mitre_id]
-        links = " ".join([f"<a href='https://attack.mitre.org/techniques/{mid}' target='_blank'>[{mid}]</a>" for mid in ids])
+        links = " ".join([f"<a href='{build_mitre_link(mid)}' target='_blank'>[{mid}]</a>" for mid in ids])
 
         html += f"<div class='alert severity-{severity}' data-severity='{severity}' data-mitre='{','.join(ids)}' data-time='{timestamp}' data-content='{content_text}'>"
         html += f"<h3>{desc}</h3>"
