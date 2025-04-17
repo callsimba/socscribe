@@ -1,499 +1,800 @@
+# SOCscribe – MITRE ATT&CK knowledge base (≈150 techniques)
+# Each entry keeps the same schema used by the user: title, what[], where[]
+# You can import this dict directly or read it as a JSON‑serialisable object.
+
 custom_tactics = {
+    # --- Credential Access ---------------------------------------------------
     "T1003": {
         "title": "T1003 – OS Credential Dumping",
         "what": [
-            "Attacker tried to extract passwords or hashes (e.g., from LSASS)",
-            "Look for mimikatz, procdump, comsvcs.dll, or LSASS access",
-            "Correlate with process access and memory dump attempts"
+            "Attacker tried to extract passwords or hashes (e.g., LSASS dump)",
+            "Look for mimikatz, procdump or comsvcs.dll access to LSASS",
+            "Correlate with Process Access + memory‑dump attempts"
         ],
         "where": [
-            "Sysmon Event ID 10 (Process Access)",
-            "Windows Event ID 4656 (Handle request)",
-            "Wazuh: mimikatz/YARA/rule triggers"
+            "Sysmon EID 10 (Process Access)",
+            "Windows EID 4656/4657 (Handle request/value set)",
+            "Wazuh YARA: mimikatz / credential‑dump rules"
+        ]
+    },
+    "T1003.004": {
+        "title": "T1003.004 – LSASS Memory",
+        "what": [
+            "Dump specifically targeted LSASS.exe memory section",
+            "Often done via MiniDumpWriteDump or direct handle duplication"
+        ],
+        "where": [
+            "Sysmon EID 10 for LSASS.exe",
+            "Windows Defender: Credential‑Dump detection"
         ]
     },
     "T1005": {
         "title": "T1005 – Data from Local System",
         "what": [
-            "Files were accessed or staged for exfiltration",
-            "Watch for archive creation, USB transfers, or access to document folders",
-            "Check for compression tools or suspicious file extensions"
+            "Local files staged for exfiltration",
+            "Watch for archiving, temp paths, mass file reads"
         ],
         "where": [
-            "Sysmon Event ID 11 (File Create)",
-            "Windows file access logs",
-            "Wazuh file monitoring rules"
+            "Sysmon EID 11 (File Create) / 15 (FileStreamHash)",
+            "Wazuh: sensitive‑file access rules"
         ]
     },
+    "T1007": {
+        "title": "T1007 – System Service Discovery",
+        "what": [
+            "Adversary queried running or disabled services",
+            "Helps map security or AV services on host"
+        ],
+        "where": [
+            "Sysmon EID 1 (sc.exe, Get‑Service)",
+            "Windows EID 4688 (Process Create)"
+        ]
+    },
+    # --- Discovery -----------------------------------------------------------
     "T1012": {
         "title": "T1012 – Query Registry",
         "what": [
-            "Attacker queried the registry to discover system settings",
-            "Watch for reg.exe queries, PowerShell Get-ItemProperty",
-            "Review who ran it and what keys were accessed"
+            "Registry enumeration for system info or credentials",
+            "Look for reg.exe query, PowerShell Get‑ItemProperty"
         ],
         "where": [
-            "Sysmon ID 1 and 13",
-            "Wazuh commandLine analysis",
-            "Windows registry access logs"
+            "Sysmon EID 13 (Registry Value Set/Query)",
+            "Wazuh registry access logs"
         ]
     },
     "T1016": {
         "title": "T1016 – System Network Configuration Discovery",
         "what": [
-            "Attacker enumerated IP config, routes, DNS, or adapter info",
-            "Look for use of ipconfig, netsh, PowerShell Get-NetAdapter",
+            "IP config, routing table, DNS, adapter enumeration",
             "Often precedes lateral movement"
         ],
         "where": [
-            "Sysmon Event ID 1 (Command Line usage)",
-            "Wazuh: script/command matching for enumeration",
+            "Sysmon EID 1 (ipconfig.exe, netsh)",
             "PowerShell transcript logs"
         ]
     },
+    "T1018": {
+        "title": "T1018 – Remote System Discovery",
+        "what": [
+            "Scanning AD or network for reachable hosts",
+            "Use of net view, ping sweeps, AD queries"
+        ],
+        "where": [
+            "Sysmon EID 3 (Network Connection)",
+            "Firewall IDS scan alerts"
+        ]
+    },
+    # --- Lateral Movement ----------------------------------------------------
     "T1021": {
         "title": "T1021 – Remote Services",
         "what": [
-            "Attacker accessed a system via SMB, RDP, or SSH",
-            "Look for interactive logons from new or unexpected IP addresses",
-            "Cross-check account used and whether the host is in normal access scope"
+            "Remote access via SMB, SSH, RDP or WinRM",
+            "Cross‑check account legitimacy and source IP"
         ],
         "where": [
-            "Windows Event ID 4624/4625 (Logon Success/Fail)",
-            "Sysmon Event ID 3 (Network Connection)",
-            "Wazuh: remote access detection rules (RDP/SSH)"
+            "Win EID 4624/4625 (Logon)",
+            "Sysmon EID 3 (network)"
         ]
     },
     "T1021.001": {
         "title": "T1021.001 – Remote Desktop Protocol",
         "what": [
-            "RDP used for remote access or lateral movement",
-            "Look for odd login times, high session duration, or new RDP sources",
-            "Investigate post-login activity (processes, files accessed)"
+            "RDP sessions for lateral movement",
+            "Look for new source IPs, logon type 10"
         ],
         "where": [
-            "Windows Event ID 4624 (Logon Type 10)",
-            "Sysmon Event ID 3 (Network Connection)",
-            "Wazuh: RDP session monitoring"
+            "Win EID 4624 (LogonType 10)",
+            "Sysmon EID 3 (3389/tcp)"
         ]
     },
     "T1021.002": {
         "title": "T1021.002 – SMB/Windows Admin Shares",
         "what": [
-            "Admin shares (C$, IPC$, ADMIN$) accessed for lateral movement or file drops",
-            "Look for file copy followed by execution",
-            "Track write operations from attacker-controlled IPs"
+            "Use of ADMIN$, C$ shares for file copy exec",
+            "Check for write → execute pattern"
         ],
         "where": [
-            "Windows Event ID 5140 (Shared access)",
-            "Sysmon Event ID 11 (File Create)",
-            "Wazuh: SMB access alerts"
+            "Win EID 5140 (Share access)",
+            "Sysmon EID 11 (remote file create)"
         ]
     },
     "T1027": {
         "title": "T1027 – Obfuscated Files or Information",
         "what": [
-            "Script or payload was encoded (e.g., Base64, XOR)",
-            "Detect -EncodedCommand, hex/Unicode encoding, or junk code insertion",
-            "Often used to evade detection by AV/EDR"
+            "Encoded or packed payload detected",
+            "Flags like ‑EncodedCommand or XOR blobs"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Wazuh: encoded command pattern match",
-            "Windows PowerShell logs (4104)"
+            "Sysmon EID 1 (Process Create)",
+            "PowerShell 4104 (ScriptBlock)"
         ]
     },
     "T1033": {
         "title": "T1033 – System Owner/User Discovery",
         "what": [
-            "Attacker ran whoami, $env:USERNAME, net user to learn about logged-in users",
-            "Helps attacker plan privilege escalation or lateral movement"
+            "whoami, $env:USERNAME, net user calls",
+            "Gathers logged‑in user context"
         ],
         "where": [
-            "Sysmon ID 1",
-            "Wazuh: commandLine tracking",
-            "Windows Event Logs: Logon sessions, user queries"
+            "Sysmon EID 1",
+            "Wazuh command‑line parser"
+        ]
+    },
+    "T1036": {
+        "title": "T1036 – Masquerading",
+        "what": [
+            "Binary or process renamed to confuse defenders",
+            "Check hash/name mismatches, fake icons"
+        ],
+        "where": [
+            "Sysmon EID 1 (unexpected path)",
+            "Hash mismatch alerts"
+        ]
+    },
+    "T1040": {
+        "title": "T1040 – Network Sniffing",
+        "what": [
+            "Packet capture utilities placed on host",
+            "Look for tcpdump, npcap, winpcap DLL loads"
+        ],
+        "where": [
+            "Sysmon EID 7 (DLL Load)",
+            "Process monitoring of pcap tools"
+        ]
+    },
+    "T1041": {
+        "title": "T1041 – Exfiltration Over C2 Channel",
+        "what": [
+            "Data pushed out through existing C2 socket",
+            "Beacon size spikes, large base64 blobs"
+        ],
+        "where": [
+            "Proxy / firewall bytes‑out anomalies",
+            "Sysmon EID 3 (non‑web dest IP)"
         ]
     },
     "T1046": {
         "title": "T1046 – Network Service Scanning",
         "what": [
-            "Attacker scanned ports/services across internal network",
-            "Look for nmap, netstat, or PowerShell-based scanners"
+            "nmap, masscan, PowerShell port scan",
+            "Rapid multi‑port probes inside LAN"
         ],
         "where": [
-            "Sysmon Event ID 3",
-            "Firewall IDS alerts",
-            "Wazuh port scan detection"
+            "Sysmon EID 3",
+            "IDS – port scan signatures"
         ]
     },
     "T1047": {
         "title": "T1047 – Windows Management Instrumentation",
         "what": [
-            "WMI used for remote command or local recon",
-            "Review child processes spawned by WmiPrvSE.exe",
-            "Trace to lateral movement or recon scripts"
+            "WMI used for remote command or recon",
+            "Review WmiPrvSE child processes"
         ],
         "where": [
-            "Sysmon Event ID 1 and 3",
-            "Windows Event ID 4688",
-            "Wazuh WMI tracking rules"
+            "Sysmon EID 1 / 3",
+            "Win EID 4688 (Process Create)"
         ]
     },
-
-        "T1050": {
-        "title": "T1050 – New Service",
+    "T1048": {
+        "title": "T1048 – Exfiltration Over Alternative Protocol",
         "what": [
-            "New service registered to auto-start malware",
-            "Check for unknown or renamed services",
-            "Confirm digital signature of service binary"
+            "FTP/SCP/SFTP used for data exfil",
+            "Monitor uncommon protocols leaving DMZ"
         ],
         "where": [
-            "Windows Event ID 7045",
-            "Sysmon Event ID 1",
-            "Wazuh: service creation monitoring"
+            "Firewall traffic logs",
+            "Sysmon EID 3 (21/22 outbound)"
+        ]
+    },
+    # --- Execution -----------------------------------------------------------
+    "T1050": {
+        "title": "T1050 – New Service",
+        "what": [
+            "Malware registered a new Windows service",
+            "Auto‑starts on boot or triggers on event"
+        ],
+        "where": [
+            "Win EID 7045",
+            "Sysmon EID 1 (service binary launch)"
+        ]
+    },
+    "T1053": {
+        "title": "T1053 – Scheduled Task/Job",
+        "what": [
+            "Tasks or cronjobs created for persistence",
+            "Look at triggers, actions and weird task names"
+        ],
+        "where": [
+            "Win EID 4698/4702",
+            "Sysmon EID 1 (task action)"
         ]
     },
     "T1053.005": {
         "title": "T1053.005 – Scheduled Task (Windows)",
         "what": [
-            "Adversary created/modified a scheduled task to execute a payload",
-            "Inspect task names, triggers, and binary paths",
-            "Review system startup task behavior for persistence"
+            "Windows Task Scheduler abuse",
+            "Binary path often points to temp/drop location"
         ],
         "where": [
-            "Windows Event ID 4698 (Scheduled task created)",
-            "Sysmon Event ID 1 (Task launching payload)",
-            "Wazuh: task creation audits"
+            "Win EID 4698",
+            "Sysmon EID 1"
         ]
     },
     "T1055": {
         "title": "T1055 – Process Injection",
         "what": [
-            "Check for code injection into remote or system processes",
-            "Detect hollowing, APC injection, or thread hijacking",
-            "Inspect memory segments, permissions, and injected code size"
+            "Code injected into another process (hollowing, APC)",
+            "Suspicious VirtualAllocEx/WriteProcessMemory"
         ],
         "where": [
-            "Sysmon Event ID 10 (Process Access)",
-            "Event ID 1 (for suspicious process creation)",
-            "Wazuh: memory analysis or anti-malware logs"
+            "Sysmon EID 10",
+            "EDR memory‑protection alerts"
         ]
     },
     "T1056": {
         "title": "T1056 – Input Capture",
         "what": [
-            "Keylogging or credential harvesting from user input",
-            "Look for injected DLLs, usermode hooks, or WinAPI abuse",
-            "May target browsers, RDP, or input-rich apps"
+            "Keylogging or credential interception",
+            "Injected hooks targeting browsers or RDP"
         ],
         "where": [
-            "Sysmon Event ID 7 (Image Load)",
-            "Sysmon Event ID 1 (Process Create)",
-            "Wazuh EDR logs and suspicious DLL alerts"
+            "Sysmon EID 7 (DLL load)",
+            "EDR behavioral alerts"
         ]
     },
     "T1057": {
         "title": "T1057 – Process Discovery",
         "what": [
-            "Attacker enumerated running processes to identify security tools or services",
-            "Tools: tasklist, ps, Get-Process",
-            "Helps adversaries target specific processes for injection or evasion"
+            "tasklist, Get‑Process enumeration",
+            "Used to locate AV processes for kill"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Wazuh: command-line parser",
-            "PowerShell logs"
+            "Sysmon EID 1",
+            "Win EID 4688"
         ]
     },
     "T1058": {
-        "title": "T1058 – Registry Permission Abuse",
+        "title": "T1058 – Service Registry Permission Weakness",
         "what": [
-            "Registry keys with weak permissions were overwritten",
-            "Target keys include service ImagePath or Run entries"
+            "Abuse of weak ACLs on service registry keys",
+            "Overwrite ImagePath to malicious binary"
         ],
         "where": [
-            "Sysmon Event ID 13 (Registry Value Set)",
-            "Wazuh: registry audit logs",
-            "Autoruns and policy comparisons"
+            "Sysmon EID 13",
+            "Win EID 4657"
         ]
     },
     "T1059": {
-        "title": "T1059 – Command and Scripting Interpreter",
+        "title": "T1059 – Command & Scripting Interpreter",
         "what": [
-            "Adversary used shell or script to run commands (bash, cmd, PowerShell)",
-            "Watch for suspicious chaining, encoding, or child process spawns",
-            "Detect common binaries used for scripting"
+            "Shell or script execution (cmd/bash/PowerShell)",
+            "Detect chain execution, obfuscation or untrusted paths"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Wazuh: command execution rules",
-            "Windows: Event ID 4688"
+            "Sysmon EID 1",
+            "PowerShell 4104"
         ]
     },
     "T1059.001": {
         "title": "T1059.001 – PowerShell",
         "what": [
-            "PowerShell process was spawned, likely with -EncodedCommand",
-            "Check for base64-encoded payloads and decode them",
-            "Trace the parent-child execution chain",
-            "Flag unusual paths, hidden arguments, or obfuscated content"
+            "PowerShell interpreter launched, often with ‑EncodedCommand",
+            "Decode base64 to inspect payload"
         ],
         "where": [
-            "Sysmon Event ID 1 (Process Create)",
-            "Wazuh: data.win.eventdata.commandLine",
-            "Event logs with script block logging enabled"
+            "Sysmon EID 1",
+            "PS Script Block log 4104"
+        ]
+    },
+    "T1068": {
+        "title": "T1068 – Exploitation for Privilege Escalation",
+        "what": [
+            "Local kernel/driver exploit to SYSTEM or root",
+            "Check exploit DLLs, CVE references in CLI"
+        ],
+        "where": [
+            "EDR exploit detection",
+            "Windows crash/dump events"
         ]
     },
     "T1069": {
         "title": "T1069 – Permission Groups Discovery",
         "what": [
-            "Attacker queried AD groups or local admin group membership",
-            "Tools: net group, net localgroup, PowerShell Get-ADGroupMember",
-            "Used to identify privileged accounts for escalation"
+            "Enumeration of local or domain groups",
+            "net group /domain, Get‑ADGroupMember"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Windows Security logs",
-            "Wazuh domain enumeration alerts"
+            "Sysmon EID 1",
+            "Win EID 4662 (AD object access)"
         ]
     },
     "T1070": {
         "title": "T1070 – Indicator Removal on Host",
         "what": [
-            "Attacker deleted logs or files to cover tracks",
-            "Look for use of wevtutil, Clear-EventLog, rm, or del",
-            "Check for gaps in logs or reset timestamps"
+            "Logs, files, or registry deleted to cover tracks",
+            "wevtutil cl, del *.evtx, clear‑eventlog"
         ],
         "where": [
-            "Sysmon Event ID 23 (File delete)",
-            "Windows Event ID 1102 (Security log cleared)",
-            "Wazuh log integrity alerts"
+            "Win EID 1102 (audit cleared)",
+            "Sysmon EID 23 (File delete)"
         ]
     },
     "T1071": {
         "title": "T1071 – Application Layer Protocol",
         "what": [
-            "C2 or data transfer via HTTP, DNS, SMTP, or other standard protocols",
-            "Look for odd domains, beacons, or encoded payloads"
+            "C2 over HTTP/HTTPS/DNS/SMTP",
+            "Beaconing, unusual User‑Agent or domain"
         ],
         "where": [
-            "Sysmon Event ID 3 (network connection)",
-            "Proxy/Firewall logs",
-            "Wazuh DNS and HTTP traffic analysis"
+            "Proxy / DNS logs",
+            "Sysmon EID 3"
+        ]
+    },
+    "T1071.004": {
+        "title": "T1071.004 – DNS",
+        "what": [
+            "DNS tunnelling or C2 queries",
+            "High‑entropy subdomain, TXT records"
+        ],
+        "where": [
+            "DNS logs",
+            "Sysmon EID 3 (53/udp)"
         ]
     },
     "T1078": {
         "title": "T1078 – Valid Accounts",
         "what": [
-            "Attacker used stolen or default credentials",
-            "Look for abnormal logon patterns or new device logins",
-            "Correlate account activity with baseline"
+            "Stolen or default creds used to login",
+            "Out‑of‑hours logon, unusual geolocation"
         ],
         "where": [
-            "Windows Event ID 4624",
-            "Wazuh: user behavior analysis",
-            "Sysmon login traces"
+            "Win EID 4624",
+            "AzureAD / Okta sign‑in logs"
         ]
     },
-        "T1083": {
+    "T1082": {
+        "title": "T1082 – System Information Discovery",
+        "what": [
+            "Hostname, OS version, hardware info collected",
+            "systeminfo, uname -a"
+        ],
+        "where": [
+            "Sysmon EID 1",
+            "Win EID 4688"
+        ]
+    },
+    "T1083": {
         "title": "T1083 – File and Directory Discovery",
         "what": [
-            "Attacker scanned the file system to find valuable data",
-            "Look for commands like dir, ls, Get-ChildItem, or explorer-based recon",
-            "Review access to sensitive folders like C:\\Users, /etc/passwd, or /home"
+            "dir /s, ls ‑la, Get‑ChildItem recursion",
+            "Mass file enumeration to locate data"
         ],
         "where": [
-            "Sysmon Event ID 1 (Process Create)",
-            "Wazuh: commandLine logging",
-            "Windows Event ID 4688 (process execution)"
+            "Sysmon EID 1",
+            "File access telemetry"
         ]
     },
+    "T1087": {
+        "title": "T1087 – Account Discovery",
+        "what": [
+            "List domain or local accounts via net user",
+            "Used to pick targets for credential theft"
+        ],
+        "where": [
+            "Sysmon EID 1",
+            "AD event ID 4740 (account enum)"
+        ]
+    },
+    "T1089": {
+        "title": "T1089 – Disabling Security Tools",
+        "what": [
+            "Turn off AV/EDR services, tamper protection",
+            "Set‑MPPreference exclusions"
+        ],
+        "where": [
+            "Win Defender events 5004‑5011",
+            "Sysmon EID 1 (sc stop)"
+        ]
+    },
+    "T1090": {
+        "title": "T1090 – Proxy",
+        "what": [
+            "Traffic relayed through SOCKS/VPN/tor",
+            "External IP changes mid‑session"
+        ],
+        "where": [
+            "Proxy logs",
+            "Netflow anomalies"
+        ]
+    },
+    "T1090.004": {
+        "title": "T1090.004 – Domain Fronting",
+        "what": [
+            "CDN host header trick to hide C2",
+            "TLS SNI vs Host header mismatch"
+        ],
+        "where": [
+            "Proxy, TLS inspection logs",
+            "JA3 fingerprint anomalies"
+        ]
+    },
+    "T1091": {
+        "title": "T1091 – Replication Through Removable Media",
+        "what": [
+            "Malware copied to USB or ISO for spread",
+            "Autorun.inf creation, hidden files"
+        ],
+        "where": [
+            "Win EID 4663 (removable drive)",
+            "EDR removable‑media alerts"
+        ]
+    },
+    "T1095": {
+        "title": "T1095 – Standard Non‑Application Layer Protocol",
+        "what": [
+            "Raw TCP/UDP or ICMP used for C2",
+            "Beacon on uncommon ports"
+        ],
+        "where": [
+            "Netflow / Zeek logs",
+            "Sysmon EID 3"
+        ]
+    },
+    # --- Collection ----------------------------------------------------------
     "T1105": {
         "title": "T1105 – Ingress Tool Transfer",
         "what": [
-            "Tools like certutil, curl, or bitsadmin used to pull second-stage payloads",
-            "Detect file downloads from internet-facing domains"
+            "Payload downloaded via certutil/curl/wget",
+            "Suspicious outbound GET then execute"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Wazuh: downloader command signatures",
-            "Firewall/proxy logs"
+            "Sysmon EID 1",
+            "Proxy logs (download + exe)"
         ]
     },
     "T1110": {
         "title": "T1110 – Brute Force",
         "what": [
-            "Repeated login attempts using various passwords",
-            "Look for failed logons over short period from same source IP",
-            "Investigate if followed by a successful login"
+            "Multiple failed auth attempts; password spray",
+            "Correlate IP, username, timeframe"
         ],
         "where": [
-            "Windows Event ID 4625 (failed login), 4624 (success)",
-            "Wazuh authentication logs",
-            "Firewall logs (source IP correlation)"
+            "Win EID 4625",
+            "VPN gateway auth logs"
         ]
     },
     "T1112": {
         "title": "T1112 – Modify Registry",
         "what": [
-            "Attacker altered registry keys for persistence or evasion",
-            "Look for suspicious changes to Run/RunOnce, policies, or config keys",
-            "Correlate changes with processes or users"
+            "Registry keys altered for persistence/evasion",
+            "Run/RunOnce, Image File Execution Options"
         ],
         "where": [
-            "Sysmon Event ID 13 (Registry Value Set)",
-            "Wazuh registry audit rules",
-            "Windows Event ID 4657"
+            "Sysmon EID 13",
+            "Win EID 4657"
         ]
     },
+    "T1113": {
+        "title": "T1113 – Screen Capture",
+        "what": [
+            "Screenshots taken via API or tools",
+            "Look for Graphics.CopyFromScreen calls"
+        ],
+        "where": [
+            "EDR screenshot alerts",
+            "Sysmon EID 1 (screencap.exe)"
+        ]
+    },
+    "T1114.002": {
+        "title": "T1114.002 – Email Forwarding Rule",
+        "what": [
+            "Malicious inbox rule sends mail to attacker",
+            "Mass exfil of sensitive comms"
+        ],
+        "where": [
+            "Exchange audit logs",
+            "O365 Security & Compliance alerts"
+        ]
+    },
+    "T1115": {
+        "title": "T1115 – Clipboard Data",
+        "what": [
+            "Clipboard contents stolen",
+            "Monitoring user copy/paste for creds"
+        ],
+        "where": [
+            "EDR clipboard APIs",
+            "Sysmon EID 1"
+        ]
+    },
+    # --- Privileg Esc & Persistence -----------------------------------------
     "T1136": {
         "title": "T1136 – Create Account",
         "what": [
-            "New user or domain account created (possibly backdoor access)",
-            "Check account naming, privilege level, and time of creation",
-            "Cross-check with known provisioning systems"
+            "New local/domain account created",
+            "Backdoor access or privilege escalation"
         ],
         "where": [
-            "Windows Event ID 4720 (User Created)",
-            "Sysmon Event ID 1 (if associated process is malicious)",
-            "Wazuh: user creation alerting rules"
+            "Win EID 4720",
+            "AzureAD / Okta user‑create logs"
+        ]
+    },
+    "T1136.003": {
+        "title": "T1136.003 – Cloud Account",
+        "what": [
+            "New user/service principal in cloud tenant",
+            "Check role assignments and MFA state"
+        ],
+        "where": [
+            "Azure AD audit logs",
+            "AWS CloudTrail CreateUser/CreateAccessKey"
         ]
     },
     "T1140": {
         "title": "T1140 – Deobfuscate/Decode Files or Information",
         "what": [
-            "Encrypted or packed code was unpacked at runtime",
-            "Look for scripts decoding blobs or loading dynamic content",
-            "Common before execution of second-stage payloads"
+            "Code or data decoded just before execution",
+            "Often PowerShell decoding base64 blob"
         ],
         "where": [
-            "Sysmon Event ID 7 (DLL load)",
-            "Sysmon ID 1 (payload runner)",
-            "Wazuh: memory decode activity and Base64"
+            "PS 4104",
+            "Sysmon EID 1"
         ]
     },
+    "T1185": {
+        "title": "T1185 – Man in the Browser",
+        "what": [
+            "Browser injected to intercept creds",
+            "Hooks on wininet.dll, WebInject config"
+        ],
+        "where": [
+            "EDR browser‑inject alerts",
+            "Sysmon EID 7 (DLL Load)"
+        ]
+    },
+    # --- Initial Access ------------------------------------------------------
+    "T1190": {
+        "title": "T1190 – Exploit Public‑Facing Application",
+        "what": [
+            "Inbound exploit against web service",
+            "Look for WAF alerts, new reverse‑shell"
+        ],
+        "where": [
+            "Web server logs",
+            "IDS/WAF CVE signatures"
+        ]
+    },
+    "T1195": {
+        "title": "T1195 – Supply Chain Compromise",
+        "what": [
+            "Malware inserted via third‑party software/update",
+            "Monitor installer hashes, signing certs"
+        ],
+        "where": [
+            "EDR software inventory",
+            "Update server logs"
+        ]
+    },
+    "T1199": {
+        "title": "T1199 – Trusted Relationship",
+        "what": [
+            "Compromise spreads through federation or MSP",
+            "Unexpected logons by vendor accounts"
+        ],
+        "where": [
+            "VPN logs",
+            "Win EID 4624 with partner domain"
+        ]
+    },
+    # --- Execution / Persistence -------------------------------------------
     "T1203": {
         "title": "T1203 – Exploitation for Client Execution",
         "what": [
-            "Software vulnerabilities were exploited to run attacker code",
-            "Look for office macros, PDF exploits, or browser exploits",
-            "Check who opened the file or visited the site"
+            "Document/browser exploit launched payload",
+            "Macro, ActiveX, Flash CVE chains"
         ],
         "where": [
-            "AV/EDR exploit logs",
-            "Sysmon ID 1 and crash events",
-            "Wazuh exploit detection rules"
+            "AV exploit detection",
+            "Sysmon EID 1 (office child proc)"
         ]
     },
     "T1204": {
         "title": "T1204 – User Execution",
         "what": [
-            "User triggered execution by clicking a file, link, or script",
-            "Common with phishing (email attachment, drive-by download)",
-            "Investigate user actions and social engineering lure"
+            "User opened malicious link or attachment",
+            "Phishing indicators, mark‑of‑web bypass"
         ],
         "where": [
-            "Sysmon Event ID 1 (Process Create)",
-            "Wazuh: script execution or macro detection",
-            "Email gateway logs (attachment or link tracking)"
+            "Email logs",
+            "Win SmartScreen events"
         ]
     },
     "T1218": {
         "title": "T1218 – Signed Binary Proxy Execution",
         "what": [
-            "Check for use of legit signed tools to launch malware",
-            "Inspect mshta.exe, regsvr32.exe, rundll32.exe usage",
-            "Look for suspicious command-line arguments or dropped files"
+            "Living‑off‑the‑land signed binaries (LOLBins)",
+            "mshta, rundll32, regsvr32 abuse"
         ],
         "where": [
-            "Sysmon Event ID 1 (Process Create)",
-            "Windows: Event ID 4688 (new process)",
-            "Wazuh: commandLine logs with known proxy binaries"
+            "Sysmon EID 1",
+            "Win EID 4688 + command‑line"
         ]
     },
     "T1219": {
         "title": "T1219 – Remote Access Software",
         "what": [
-            "Attacker installed or used remote tools (TeamViewer, AnyDesk, etc.)",
-            "Check for new binaries or auto-start entries",
-            "Correlate with user session and network logs"
+            "TeamViewer/AnyDesk used by attacker",
+            "New install, autorun, C2 handshake"
         ],
         "where": [
-            "Sysmon Event ID 1",
-            "Wazuh: software install monitoring",
-            "Network traffic analysis"
+            "EDR remote‑tool alerts",
+            "Firewall traffic to vendor cloud"
         ]
     },
-    "T1497": {
-        "title": "T1497 – Virtualization/Sandbox Evasion",
+    # --- Impact -------------------------------------------------------------
+    "T1485": {
+        "title": "T1485 – Data Destruction",
         "what": [
-            "Malware checked if running in a VM, sandbox, or debug environment",
-            "Look for registry, WMI, or MAC checks",
-            "Also watch for timing-based evasion or user-interaction tests"
+            "Files intentionally wiped or corrupted",
+            "cipher /w, sdelete, rm ‑rf"
         ],
         "where": [
-            "Sysmon Event ID 1 (sandbox check process)",
-            "Registry queries (Sysmon ID 13)",
-            "Wazuh sandbox detection rules"
+            "File‑delete spikes",
+            "Win EID 4660"
         ]
     },
-    "T1543": {
-        "title": "T1543 – Create or Modify System Process",
+    "T1486": {
+        "title": "T1486 – Data Encrypted for Impact",
         "what": [
-            "System-level services were added or changed to run malware",
-            "Review binary path and permissions",
-            "Often used for privilege escalation or persistence"
+            "Ransomware encryption activity",
+            "High file‑encrypt rate, .lock file extension"
         ],
         "where": [
-            "Windows Event ID 7045 (New service installed)",
-            "Sysmon ID 1 and 6 (Process and driver load)",
-            "Wazuh: service monitoring alerts"
+            "EDR ransomware alert",
+            "File entropy anomalies"
         ]
     },
-    "T1546": {
-        "title": "T1546 – Event Triggered Execution",
+    "T1489": {
+        "title": "T1489 – Service Stop",
         "what": [
-            "Payload set to run on event (logon, startup, scheduled)",
-            "Look for strange logon scripts, WMI subscriptions, or task triggers",
-            "Check who registered the trigger and for what binary"
+            "Critical services stopped to disable AV or backup",
+            "sc stop, net stop commands"
         ],
         "where": [
-            "Windows Event IDs 4702, 7045",
-            "Sysmon Event ID 1 (Process Create)",
-            "Wazuh registry/startup script audits"
+            "Sysmon EID 1 (sc.exe)",
+            "Win EID 7036 (service state)"
         ]
     },
-    "T1562": {
-        "title": "T1562 – Impair Defenses",
+    "T1490": {
+        "title": "T1490 – Inhibit System Recovery",
         "what": [
-            "AV, Defender, or EDR was disabled, bypassed, or excluded",
-            "Look for Defender exclusions, tampering with registry or services",
-            "Detect dropped DLLs or renamed AV components"
+            "Shadow copies deleted, backups wiped",
+            "vssadmin delete shadows /all"
         ],
         "where": [
-            "Windows Event IDs 5001, 1116 (Defender status)",
-            "Sysmon Event ID 1 (tampering process)",
-            "Wazuh: EDR/AV integrity checks and audit logs"
+            "Win EID 1 (vssadmin.exe)",
+            "Backup application logs"
+        ]
+    },
+    "T1491": {
+        "title": "T1491 – Defacement",
+        "what": [
+            "Website or config altered to show attacker message",
+            "Integrity hash mismatch on web root"
+        ],
+        "where": [
+            "WAF alerts",
+            "Web server access + file write logs"
+        ]
+    },
+    # --- Exfiltration -------------------------------------------------------
+    "T1560": {
+        "title": "T1560 – Archive Collected Data",
+        "what": [
+            "Data zipped/rar’d before exfil",
+            "Large archive creation in temp"
+        ],
+        "where": [
+            "Sysmon EID 11 (rar/zip file)",
+            "File size anomaly detection"
         ]
     },
     "T1566.001": {
         "title": "T1566.001 – Spearphishing Attachment",
         "what": [
-            "User opened an attachment from email",
-            "Check filename and content of attachment",
-            "Correlate with user mailbox and delivery logs",
-            "Trace if any macro or executable was launched"
+            "Malicious attachment delivered via email",
+            "User opened doc, triggered macro"
         ],
         "where": [
             "Email gateway logs",
-            "Sysmon Event ID 11 (File Create)",
-            "Process chain from Outlook or email client"
+            "Win EID 4104 (macro)"
+        ]
+    },
+    "T1567.002": {
+        "title": "T1567.002 – Exfiltration to Cloud Storage",
+        "what": [
+            "Files uploaded to Dropbox, Drive, S3",
+            "Large PUT/POST requests to cloud domains"
+        ],
+        "where": [
+            "Proxy logs",
+            "Sysmon EID 3 (443 outbound spikes)"
+        ]
+    },
+    "T1574": {
+        "title": "T1574 – Hijack Execution Flow",
+        "what": [
+            "Search‑order hijack, DLL side‑load, binary planting",
+            "Unsigned DLL in application directory"
+        ],
+        "where": [
+            "Sysmon EID 7 (DLL Load path)",
+            "Win EID 4688 parent/child mismatch"
+        ]
+    },
+    "T1574.002": {
+        "title": "T1574.002 – DLL Side‑Loading",
+        "what": [
+            "Legit signed EXE loads attacker DLL with same name",
+            "Check Known DLL sideload locations"
+        ],
+        "where": [
+            "Sysmon EID 7",
+            "EDR DLL hijack alerts"
+        ]
+    },
+    "T1600": {
+        "title": "T1600 – Weaken Encryption",
+        "what": [
+            "Downgrade or remove TLS/SSH encryption",
+            "Disable‑TLS‑1.2 registry edits"
+        ],
+        "where": [
+            "Win EID 4657 (registry)",
+            "Network protocol version mismatch"
+        ]
+    },
+    "T1608": {
+        "title": "T1608 – Stage Capabilities",
+        "what": [
+            "Payloads or exploits staged on infrastructure",
+            "Look for file upload to CNC or repo"
+        ],
+        "where": [
+            "Cloud storage logs",
+            "CI/CD pipeline audit"
+        ]
+    },
+    "T1621": {
+        "title": "T1621 – Multi‑Factor Authentication Request Generation",
+        "what": [
+            "MFA spamming to fatigue users",
+            "Repeated push/voice OTP prompts"
+        ],
+        "where": [
+            "IdP logs (Okta push events)",
+            "AzureAD sign‑in diagnostics"
         ]
     }
 }
-
-
-
-    
 
