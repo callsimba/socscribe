@@ -15,7 +15,7 @@ field_explanations = {
   # ——— RULE CORE ———
   "rule.id": "Numeric ID of the detection rule that fired.",
   "rule.level": "Original Wazuh severity 0‑15. 0‑3 = info, 4‑7 = suspicious, 8+ = bad.",
-  "rule.description": "Plain‑English summary of what triggered. Read first!",
+  "rule.description": "Human‑readable summary of why the rule fired. Read this first—treat it as the alert’s headline.",
   "rule.groups": "Tags attached to the rule (malware, sysmon_eid1, etc.). Handy for quick pivots.",
   "rule.firedtimes": "How many times this exact rule hit during aggregation. High = repetitive behaviour.",
   "rule.mail": "True if the rule is configured to email someone – legacy but can warn you of high value detections.",
