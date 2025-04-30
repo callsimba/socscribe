@@ -1,0 +1,23 @@
+
+    <html>
+    <head>
+        <title>SOCscribe Alert Report</title>
+        <style>
+            body { font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px; }
+            .panel { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 5px #ccc; }
+            h2 { color: #003366; }
+            h3 { color: #006699; }
+            code { background: #eee; padding: 2px 4px; border-radius: 4px; }
+        </style>
+    </head>
+    <body>
+        <div class="panel">
+            <h2>🔍 Alert Summary</h2>
+            <p><strong>Alert ID:</strong> 1679404023.589421</p>
+            <p><strong>Timestamp:</strong> 2025-04-15T11:07:03Z</p>
+            <p><strong>Host:</strong> kali-host</p>
+            <p><strong>Source IP:</strong> 185.99.34.17</p>
+            <p><strong>Description:</strong> Multiple failed SSH login attempts</p>
+            <p><strong>MITRE Tactic:</strong> Credential Access</p>
+            <p><strong>Technique:</strong> Brute Force (T1110)</p>
+    <p><strong>Geo Info:</strong> Baabda, Mohafazat Mont-Liban, Lebanon | ISP: Matrix International SARL</p><h3>🎯 Recommended Actions</h3><ul><li>Check /var/log/auth.log for additional failed attempts</li><li>Block the source IP using UFW or iptables</li><li>Consider enabling fail2ban</li><li>Investigate if any login was eventually successful</li></ul></div></body></html>

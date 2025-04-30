@@ -1,0 +1,27 @@
+{
+    "5712": {
+      "title": "Multiple failed SSH login attempts",
+      "tactic": "Credential Access",
+      "technique": "Brute Force",
+      "technique_id": "T1110",
+      "actions": [
+        "Check /var/log/auth.log for additional failed attempts",
+        "Block the source IP using UFW or iptables",
+        "Consider enabling fail2ban",
+        "Investigate if any login was eventually successful"
+      ]
+    },
+    "5715": {
+      "title": "Successful login after multiple failures",
+      "tactic": "Persistence",
+      "technique": "Valid Accounts",
+      "technique_id": "T1078",
+      "actions": [
+        "Verify the legitimacy of the login credentials",
+        "Check if login occurred from unusual geo-location or time",
+        "Check bash history or recent activity of the user",
+        "Escalate to IR if suspicious"
+      ]
+    }
+  }
+  
